@@ -52,6 +52,13 @@ Each card tests exactly ONE fact.
 - The front is a specific question, not a topic label.
 - The back is at most 20 words. If it needs more, the card is testing too much.
 - Never let the answer appear in the question.
+- ONE FACT MEANS ONE CLAUSE. Do not ask two things at once and do not join two
+  claims with "and". These are rejected:
+    "What does iodine do, and what are its dietary sources?"
+    "Iron is essential for cognitive development and haemoglobin production"
+  Write the one your excerpt actually proves, and make a second card for the
+  other if the slide supports it. A two-part answer whose quote proves only one
+  part is discarded, so a compound card is usually a card thrown away.
 - Prefer facts a nurse must act on: values, doses, priorities, safety rules,
   contraindications, assessment findings.
 ${GROUNDING_RULES}
