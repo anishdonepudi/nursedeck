@@ -186,15 +186,20 @@ describe('E2E startup gate', () => {
     // renderer should require editing this list, so the attack surface cannot
     // grow by accident.
     expect(exposure.bridgeKeys).toEqual([
+      // The four card-authoring methods are hers: write, edit, delete, browse.
+      'addCard',
       'answerCard',
       'appInfo',
       'cancelGeneration',
       'cancelSignIn',
       'corroborate',
       'dashboard',
+      'deleteCard',
+      'editCard',
       'exportDeck',
       'generate',
       'importLecture',
+      'listDeck',
       'listLectures',
       'listTriage',
       'onGenerateProgress',

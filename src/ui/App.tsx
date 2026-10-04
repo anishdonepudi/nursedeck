@@ -19,7 +19,7 @@ import { Deck } from './Deck.js';
 type View =
   | { name: 'library' }
   | { name: 'triage'; lectureId: string }
-  | { name: 'study'; lectureId: string }
+  | { name: 'study'; lectureId?: string }
   | { name: 'exam'; lectureId?: string }
   | { name: 'dashboard'; lectureId?: string }
   | { name: 'deck'; lectureId: string; title: string };
@@ -52,6 +52,7 @@ export function App() {
             onSelect={setSelectedLecture}
             onReview={(lectureId) => setView({ name: 'triage', lectureId })}
             onStudy={(lectureId) => setView({ name: 'study', lectureId })}
+            onStudyAll={() => setView({ name: 'study' })}
             onExam={(lectureId) => setView({ name: 'exam', lectureId })}
             onDashboard={(lectureId) => setView({ name: 'dashboard', lectureId })}
             onCards={(lectureId, title) => setView({ name: 'deck', lectureId, title })}
@@ -61,7 +62,10 @@ export function App() {
           <Triage lectureId={view.lectureId} onDone={() => setView({ name: 'library' })} />
         )}
         {view.name === 'study' && (
-          <Study lectureId={view.lectureId} onDone={() => setView({ name: 'library' })} />
+          <Study
+            {...(view.lectureId ? { lectureId: view.lectureId } : {})}
+            onDone={() => setView({ name: 'library' })}
+          />
         )}
         {view.name === 'deck' && (
           <Deck

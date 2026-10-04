@@ -233,3 +233,46 @@ describe('qualifyExcerpt — outline ancestry', () => {
     expect(q).toBe('Related to potassium loss');
   });
 });
+
+describe('qualifyExcerpt — the heading is never dropped', () => {
+  /**
+   * Verbatim from the user's Fluid Volume Deficit slide. "Labs:" is an
+   * indent-0 parent, and stopping the ancestry walk there dropped the slide
+   * title -- the only line naming the condition. The citation then read
+   * "Labs: ... Osmolarity: (> 295 mOsm/kg)", which proves a number but not
+   * what it is a number FOR.
+   */
+  const DEFICIT = [
+    'Fluid Volume Deficit',
+    'Clinical Manifestations',
+    '  - Tachycardia, weak thready pulse, hypotension',
+    'Labs:',
+    '  - Osmolarity: up (> 295 mOsm/kg)',
+    '  - Urine specific gravity over 1.030',
+  ].join('\n');
+
+  it('includes the slide title even when an indent-0 parent exists', () => {
+    const q = qualifyExcerpt('Osmolarity: up (> 295 mOsm/kg)', DEFICIT);
+    expect(q).toContain('Fluid Volume Deficit');
+    expect(q).toContain('Labs:');
+    expect(verifyVerbatim(q, DEFICIT).ok).toBe(true);
+  });
+
+  it('puts the ancestry in outermost-first order', () => {
+    const q = qualifyExcerpt('Osmolarity: up (> 295 mOsm/kg)', DEFICIT);
+    expect(q.indexOf('Fluid Volume Deficit')).toBeLessThan(q.indexOf('Labs:'));
+    expect(q.indexOf('Labs:')).toBeLessThan(q.indexOf('Osmolarity'));
+  });
+
+  it('does not repeat the heading when it is already an ancestor', () => {
+    const q = qualifyExcerpt('Tachycardia, weak thready pulse, hypotension', DEFICIT);
+    expect(q.match(/Fluid Volume Deficit/g)).toHaveLength(1);
+    expect(verifyVerbatim(q, DEFICIT).ok).toBe(true);
+  });
+
+  it('still carries the numbers it quoted', async () => {
+    const { verifyNumericAgreement } = await import('@core/validate/citation.js');
+    const q = qualifyExcerpt('Osmolarity: up (> 295 mOsm/kg)', DEFICIT);
+    expect(verifyNumericAgreement('Osmolarity above 295 mOsm/kg', q).ok).toBe(true);
+  });
+});

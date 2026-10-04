@@ -294,30 +294,35 @@ export function qualifyExcerpt(excerpt: string, slideText: string): string {
   // Not found (the quote spans a line break differently) or already the heading.
   if (at <= 0) return excerpt;
 
+  // Collected innermost-first, reversed at the end.
   const ancestors: string[] = [];
-  let depth = indentOf(lines[at]!);
+  const already = (t: string) =>
+    t.length < 3 ||
+    normalizeForMatch(excerpt).includes(normalizeForMatch(t)) ||
+    ancestors.some((a) => normalizeForMatch(a) === normalizeForMatch(t));
 
-  for (let i = at - 1; i >= 0 && ancestors.length < MAX_ANCESTORS; i--) {
+  let depth = indentOf(lines[at]!);
+  for (let i = at - 1; i >= 1 && ancestors.length < MAX_ANCESTORS; i--) {
     const line = lines[i]!;
     if (!line.trim()) continue;
     const ind = indentOf(line);
-    // Line 0 is the slide heading, which sits above the outline structurally
-    // even though pptx gives it no indentation. It is the subject of last
-    // resort -- "Antidiuretic Hormone" is what makes "is a water retainer"
-    // mean anything.
-    const isHeading = i === 0;
-    if (!isHeading && ind >= depth) continue;
+    if (ind >= depth) continue;
 
     const text = tidyAncestor(line);
     depth = ind;
-
-    // Skip anything already inside the quote, and anything too thin to add a
-    // subject ("S & S" survives at 5 chars; a stray "-" does not).
-    if (text.length >= 3 && !normalizeForMatch(excerpt).includes(normalizeForMatch(text))) {
-      ancestors.push(text);
-    }
-    if (isHeading || ind === 0) break;
+    // "S & S" survives the length floor at 5 chars; a stray "-" does not.
+    if (!already(text)) ancestors.push(text);
+    if (ind === 0) break;
   }
+
+  // The slide heading goes on regardless of what the walk found. It sits above
+  // the outline structurally even though pptx gives it no indentation, and it
+  // is usually the only line naming the condition: a lab value quoted with its
+  // "Labs:" parent still does not say it belongs to fluid volume DEFICIT.
+  // Stopping the walk at the first indent-0 bullet dropped it, which is what
+  // left several otherwise-good citations unprovable.
+  const heading = lines[0] ? tidyAncestor(lines[0]) : '';
+  if (heading && !already(heading)) ancestors.push(heading);
 
   if (ancestors.length === 0) return excerpt;
 

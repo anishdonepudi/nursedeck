@@ -57,7 +57,14 @@ function answerMatches(typed: string, expected: string): boolean {
 }
 
 interface Props {
-  lectureId: string;
+  /**
+   * Omit to study every lecture at once.
+   *
+   * She already does this by hand -- she maintains one combined Quizlet set
+   * alongside the per-lecture ones -- and mixing topics is how an exam asks
+   * them, so the scheduler is pointed at the whole deck rather than one file.
+   */
+  lectureId?: string;
   onDone: () => void;
 }
 
@@ -201,6 +208,7 @@ export function Study({ lectureId, onDone }: Props) {
     <div className="study">
       <header className="study-head">
         <span>{index + 1} of {queue.length}</span>
+        {!lectureId && <span className="pill">all lectures</span>}
         {current.isNew && <span className="pill">new</span>}
         <span className="study-kind">{current.kind}</span>
 

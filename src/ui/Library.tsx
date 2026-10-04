@@ -23,12 +23,16 @@ interface Props {
   onSelect: (lectureId: string) => void;
   onReview: (lectureId: string) => void;
   onStudy: (lectureId: string) => void;
+  /** Studies every lecture in one mixed session. */
+  onStudyAll: () => void;
   onExam: (lectureId: string) => void;
   onDashboard: (lectureId: string) => void;
   onCards: (lectureId: string, title: string) => void;
 }
 
-export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDashboard, onCards }: Props) {
+export function Library({
+  selectedId, onSelect, onReview, onStudy, onStudyAll, onExam, onDashboard, onCards,
+}: Props) {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const selected = selectedId;
   const setSelected = onSelect;
@@ -89,15 +93,28 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDas
     setKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
 
   const current = lectures.find((l) => l.id === selected);
+  const totalStudiable = lectures.reduce((n, l) => n + l.studiableCount, 0);
 
   return (
     <div className="library">
       <section className="panel">
         <div className="panel-head">
           <h2>Your lectures</h2>
-          <button type="button" className="primary" onClick={() => void importFiles()} disabled={!!busy}>
-            {busy === 'importing' ? 'Importing...' : 'Add lecture'}
-          </button>
+          <div className="panel-head-actions">
+            {/*
+              She keeps one combined set across lectures as well as the
+              per-lecture ones, and an exam mixes topics, so studying
+              everything at once has to be reachable without picking a file.
+            */}
+            {totalStudiable > 0 && (
+              <button type="button" className="ghost" onClick={onStudyAll} disabled={!!busy}>
+                Study all {totalStudiable}
+              </button>
+            )}
+            <button type="button" className="primary" onClick={() => void importFiles()} disabled={!!busy}>
+              {busy === 'importing' ? 'Importing...' : 'Add lecture'}
+            </button>
+          </div>
         </div>
 
         {lectures.length === 0 ? (

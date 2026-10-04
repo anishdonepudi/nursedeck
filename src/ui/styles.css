@@ -202,6 +202,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .panel-head h2 { margin: 0; }
+.panel-head-actions { display: flex; align-items: center; gap: 8px; }
 .empty { padding: 8px 0; }
 
 .brand {
