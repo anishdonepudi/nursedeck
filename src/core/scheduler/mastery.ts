@@ -1,5 +1,6 @@
 import type { Db } from '../db/index.js';
-import { makeScheduler, readCardState } from './fsrs.js';
+import { makeScheduler, readCardState, Rating } from './fsrs.js';
+import type { Card } from 'ts-fsrs';
 
 /**
  * Readiness reporting.
@@ -13,6 +14,12 @@ import { makeScheduler, readCardState } from './fsrs.js';
 /** Beta prior. Two pseudo-observations: enough to pull a 2/2 away from 100%. */
 const PRIOR_ALPHA = 1;
 const PRIOR_BETA = 1;
+
+/**
+ * Safety rail on the forward simulation. A long horizon with short intervals
+ * could otherwise loop for a very long time per card.
+ */
+const MAX_SIMULATED_REVIEWS = 40;
 
 /** Below this many reviews a topic score is directional, not a measurement. */
 const RELIABLE_REVIEWS = 8;
@@ -176,10 +183,10 @@ export function dueForecast(
 export interface ExamProjection {
   topic: string;
   readinessNow: number;
-  /** Predicted recall on the exam date if the current schedule is followed. */
+  /** Predicted recall on the exam date, assuming due reviews get done. */
   projectedRecall: number;
   cardCount: number;
-  /** Cards that will not have been seen again before the exam. */
+  /** Cards already scheduled past the exam, so never revisited before it. */
   unseenBefore: number;
   atRisk: boolean;
 }
@@ -187,9 +194,15 @@ export interface ExamProjection {
 /**
  * Projects each topic forward to an exam date.
  *
- * Deliberately pessimistic in one respect: cards whose next review falls AFTER
- * the exam are counted as at risk, because an interval that steps over the exam
- * means the card will not be refreshed before it matters.
+ * The schedule is simulated forward rather than frozen: every review falling
+ * due before the exam is played out as answered Good. Freezing it instead
+ * answers "what if you stopped studying today", which reads as 70-something
+ * percent for everything and makes the at-risk flag fire on every topic — a
+ * warning that is always on tells her nothing.
+ *
+ * Simulating Good is optimistic for cards she keeps failing, but those are
+ * already surfaced separately by the leech and illusion-of-knowing lists, and
+ * the readinessNow figure alongside carries her actual accuracy.
  */
 export function projectToExam(
   db: Db,
@@ -225,27 +238,37 @@ export function projectToExam(
       b.unseen += 1;
       b.recall.push(0);
     } else {
-      if (state.due > examDate) b.unseen += 1;
-      b.recall.push(
-        Number(
-          scheduler.get_retrievability(
-            {
-              due: state.due,
-              stability: state.stability,
-              difficulty: state.difficulty,
-              elapsed_days: state.elapsedDays,
-              scheduled_days: state.scheduledDays,
-              reps: state.reps,
-              lapses: state.lapses,
-              state: state.state,
-              learning_steps: state.learningSteps,
-              ...(state.lastReview ? { last_review: state.lastReview } : {}),
-            },
-            examDate,
-            false,
-          ),
-        ),
-      );
+      let card: Card = {
+        due: state.due,
+        stability: state.stability,
+        difficulty: state.difficulty,
+        elapsed_days: state.elapsedDays,
+        scheduled_days: state.scheduledDays,
+        reps: state.reps,
+        lapses: state.lapses,
+        state: state.state,
+        learning_steps: state.learningSteps,
+        ...(state.lastReview ? { last_review: state.lastReview } : {}),
+      };
+
+      // Play the schedule forward to the exam.
+      //
+      // Without this the projection answers "what if you stopped studying
+      // today", which is pessimistic enough that every topic reads "at risk" —
+      // and a flag that fires on everything carries no information. Each review
+      // falling due before the exam is simulated as answered Good, which is the
+      // outcome the schedule is tuned to produce.
+      let simulated = 0;
+      while (card.due <= examDate && simulated < MAX_SIMULATED_REVIEWS) {
+        card = scheduler.next(card, card.due, Rating.Good).card;
+        simulated += 1;
+      }
+
+      // "Unseen before the exam" now means genuinely untouched: already
+      // scheduled past the exam with no review due in between.
+      if (simulated === 0) b.unseen += 1;
+
+      b.recall.push(Number(scheduler.get_retrievability(card, examDate, false)));
     }
     buckets.set(r.topic, b);
   }

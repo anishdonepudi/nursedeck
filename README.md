@@ -119,3 +119,12 @@ npm run test:e2e     # builds, then drives the real Electron window
 Some tests invoke the real Claude Code CLI and therefore need it installed and
 signed in. Auth-failure states are covered by a stub CLI instead, so the test
 suite never has to sign you out.
+
+### Known flakiness
+
+Tests that call the live model are not perfectly deterministic -- the model may
+word a card differently or judge a borderline citation differently between runs.
+Those tests assert properties (every quote appears in its source; no number is
+asserted that the citation lacks) rather than exact strings, which absorbs most
+of it, but an occasional re-run is expected. The pure-logic suites -- scoring,
+scheduling, blueprint, quality rules, export -- are deterministic.

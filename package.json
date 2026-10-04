@@ -19,7 +19,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "postinstall": "electron-builder install-app-deps",
     "test:unit": "vitest run --exclude \"tests/e2e-*.test.ts\"",
-    "test:e2e": "npm run build && vitest run tests/e2e-gate.test.ts",
+    "test:e2e": "npm run build && vitest run tests/e2e-gate.test.ts tests/e2e-flow.test.ts",
     "demo": "tsx scripts/demo-generate.ts",
     "demo:corroborate": "tsx scripts/demo-corroborate.ts",
     "lint:chars": "node scripts/find-bad-chars.mjs src electron tests scripts"

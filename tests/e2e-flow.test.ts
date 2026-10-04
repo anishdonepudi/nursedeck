@@ -1,9 +1,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildTestPptx } from './fixtures/make-pptx.js';
+import { seedStudiableCard } from './fixtures/seed-deck.js';
 
 /**
  * The whole user journey, driven through the real built app:
@@ -18,6 +19,11 @@ let app: ElectronApplication | undefined;
 afterEach(async () => {
   await app?.close().catch(() => undefined);
   app = undefined;
+  // close() resolves before the OS has finished tearing the process down, and
+  // a new Electron instance launched into that window starts slowly enough to
+  // trip the next test's timeouts. A short settle is cheaper and steadier than
+  // inflating every timeout downstream.
+  await new Promise((r) => setTimeout(r, 1500));
 });
 
 async function launchWithLecture(): Promise<{ page: Page; pptxPath: string }> {
@@ -120,70 +126,61 @@ describe('E2E: import to study', () => {
     expect(await page.getByRole('button', { name: 'Study' }).count()).toBe(0);
   }, 900_000);
 
-  it('a verified card becomes studiable and can be answered', async () => {
-    const { page } = await launchWithLecture();
+  /**
+   * The study path, driven through the real UI but over a SEEDED deck.
+   *
+   * An earlier version generated the card live and then ran the adversarial
+   * audit on it, and was flaky for a good reason: whether a given run produced
+   * a card the auditor would pass is genuinely non-deterministic, so the test
+   * sometimes asserted against a deck with nothing studiable in it.
+   *
+   * The gate itself (accepted + verified before anything is studiable) is
+   * covered deterministically in db.test.ts and fsrs.test.ts. What is worth
+   * testing HERE is the interface: that answering a card captures confidence
+   * before the answer is revealed, shows four graded intervals, and keeps the
+   * source visible. So the deck is seeded and the UI is exercised.
+   */
+  it('shows the source, captures confidence before the answer, and grades', async () => {
+    const userData = await mkdtemp(join(tmpdir(), 'nursedeck-study-'));
+    const dataDir = join(userData, 'data');
+    await mkdir(dataDir, { recursive: true });
+    await seedStudiableCard(dataDir);
 
-    await page.getByRole('button', { name: 'Add lecture' }).click();
-    const lecture = page.locator('.lecture', { hasText: 'Fluid and Electrolyte Balance' });
-    await expect.poll(() => lecture.count(), { timeout: 60_000 }).toBe(1);
-    await lecture.click();
+    const launched = await electron.launch({
+      args: ['out/main/index.js', `--user-data-dir=${userData}`],
+      env: { ...process.env } as Record<string, string>,
+    });
+    app = launched;
+    const page = await launched.firstWindow();
+    await page.waitForLoadState('domcontentloaded');
+    await page.getByRole('button', { name: 'Start studying' }).click({ timeout: 90_000 });
 
-    const clozeToggle = page.locator('.kind', { hasText: 'Fill in the blank' }).locator('input');
-    if (await clozeToggle.isChecked()) await clozeToggle.uncheck();
-    await page.getByRole('button', { name: 'Generate', exact: true }).click();
-    await expect.poll(() => page.locator('.summary').count(), { timeout: 300_000 }).toBe(1);
+    await page.locator('.lecture').first().click();
 
-    await page.getByRole('button', { name: /Review \d+ card/ }).click();
-    await expect.poll(() => page.locator('.triage-card').count(), { timeout: 30_000 }).toBe(1);
-
-    // Run the adversarial audit on this card, then keep it.
-    await page.getByRole('button', { name: /Verify/ }).click();
-    await expect
-      .poll(() => page.locator('.cite-verified, .cite-failed').count(), { timeout: 180_000 })
-      .toBeGreaterThan(0);
-
-    const verified = await page.locator('.cite-verified').count();
-    await page.keyboard.press('k');
-
-    // Clear the rest of the queue.
-    while ((await page.locator('.triage-card').count()) > 0) {
-      await page.keyboard.press('d');
-    }
-    await page.getByRole('button', { name: /Done|Back/ }).click();
-
-    if (verified === 0) {
-      // The audit rejected it, so it must still not be studiable. That is a
-      // pass: the gate held.
-      expect(await page.getByRole('button', { name: 'Study' }).count()).toBe(0);
-      return;
-    }
-
-    /* ----------------------------- study ---------------------------- */
-
-    const studyButton = page.getByRole('button', { name: 'Study' });
+    const studyButton = page.getByRole('button', { name: 'Study', exact: true });
     await expect.poll(() => studyButton.count(), { timeout: 30_000 }).toBe(1);
     await studyButton.click();
 
     await expect.poll(() => page.locator('.study-card').count(), { timeout: 30_000 }).toBe(1);
 
-    // Confidence is captured BEFORE the answer is shown.
+    // Confidence is captured BEFORE the answer is revealed. If the two were
+    // collected together, "confident and wrong" would be unrecoverable.
     await page.getByRole('button', { name: 'Fairly sure' }).click();
     expect(await page.locator('.study-back').count()).toBe(0);
 
-    await page.locator('.study-input').fill('an answer');
+    await page.locator('.study-input').fill('3.5 to 5.0 mEq/L');
     await page.keyboard.press('Enter');
 
-    // Answer and the four graded intervals appear together.
     await expect.poll(() => page.locator('.study-back').count()).toBe(1);
+    // Four graded buttons, each showing its predicted interval.
     expect(await page.locator('.rating').count()).toBe(4);
-    // The source stays visible while reviewing.
+    // The evidence stays on screen while she grades herself.
     expect(await page.locator('.cite blockquote').count()).toBeGreaterThan(0);
 
     await page.keyboard.press('3'); // Good
 
-    // Either the next card, or the end-of-session summary.
     await expect
       .poll(() => page.locator('.study-card, .study-empty').count(), { timeout: 30_000 })
       .toBeGreaterThan(0);
-  }, 900_000);
+  }, 300_000);
 });

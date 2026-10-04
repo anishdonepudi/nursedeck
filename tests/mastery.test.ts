@@ -215,3 +215,54 @@ describe('leeches and illusion of knowing', () => {
     expect(illusionOfKnowing(db)[0]?.front).toBe('Wrong three times');
   });
 });
+
+describe('exam projection simulates the schedule forward', () => {
+  const EXAM = new Date('2026-07-15T09:00:00Z');
+
+  /**
+   * Regression: the projection used to freeze today's state and read
+   * retrievability at the exam date, which answers "what if you stopped
+   * studying". Every topic then landed around 75% and the at-risk flag fired on
+   * all of them, which tells the user nothing.
+   */
+  it('does not flag a well-practised topic as at risk', () => {
+    const id = add('Well practised', 'Management of Care');
+    let now = NOW;
+    for (let i = 0; i < 6; i++) {
+      const s = answerCard(db, { itemId: id, rating: Rating.Good, now });
+      now = new Date(s.due.getTime() + 1000);
+    }
+
+    const [projection] = projectToExam(db, EXAM, { now: NOW });
+    expect(projection!.projectedRecall).toBeGreaterThan(0.8);
+    expect(projection!.atRisk).toBe(false);
+  });
+
+  it('still separates a strong topic from a never-studied one', () => {
+    const strong = add('Strong', 'Management of Care');
+    add('Untouched', 'Psychosocial Integrity');
+
+    let now = NOW;
+    for (let i = 0; i < 6; i++) {
+      const s = answerCard(db, { itemId: strong, rating: Rating.Good, now });
+      now = new Date(s.due.getTime() + 1000);
+    }
+
+    const projections = projectToExam(db, EXAM, { now: NOW });
+    const weak = projections.find((p) => p.topic === 'Psychosocial Integrity');
+    const good = projections.find((p) => p.topic === 'Management of Care');
+
+    expect(weak!.atRisk).toBe(true);
+    expect(good!.atRisk).toBe(false);
+    expect(good!.projectedRecall).toBeGreaterThan(weak!.projectedRecall);
+  });
+
+  it('counts only cards scheduled past the exam as never revisited', () => {
+    const id = add('Due soon', 'Basic Care and Comfort');
+    // One review leaves it due well before the exam, so it will be seen again.
+    answerCard(db, { itemId: id, rating: Rating.Good, now: NOW });
+
+    const [projection] = projectToExam(db, EXAM, { now: NOW });
+    expect(projection!.unseenBefore).toBe(0);
+  });
+});
