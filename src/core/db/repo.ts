@@ -1,0 +1,357 @@
+import { randomUUID } from 'node:crypto';
+import type { Db } from './index.js';
+import { transaction } from './index.js';
+import type { LectureDoc, LicenseTier } from '@shared/types.js';
+
+/**
+ * Data access.
+ *
+ * The important rule lives in `listStudiable`: an item is only ever returned
+ * for study when it has been accepted in triage AND has at least one verified
+ * citation. That is enforced here, in SQL, rather than being left to each
+ * caller to remember.
+ */
+
+export type ItemKind = 'flashcard' | 'cloze' | 'qa' | 'nclex';
+export type ItemStatus = 'pending' | 'accepted' | 'rejected' | 'quarantined';
+export type CitationVerdict = 'unverified' | 'verified' | 'failed';
+
+export interface SourceRow {
+  id: string;
+  kind: 'lecture' | 'textbook' | 'guideline' | 'drug_label' | 'article' | 'dataset';
+  licenseTier: LicenseTier;
+  groupOrAuthors: string;
+  year?: string;
+  title: string;
+  container?: string;
+  edition?: string;
+  doiOrUrl?: string;
+  licenseUrl?: string;
+  retrievedAt?: string;
+  fullText?: string;
+}
+
+export function insertSource(db: Db, s: Omit<SourceRow, 'id'> & { id?: string }): string {
+  const id = s.id ?? randomUUID();
+  db.prepare(
+    `INSERT INTO sources
+       (id, kind, license_tier, group_or_authors, year, title, container, edition,
+        doi_or_url, license_url, retrieved_at, full_text)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    id, s.kind, s.licenseTier, s.groupOrAuthors, s.year ?? null, s.title,
+    s.container ?? null, s.edition ?? null, s.doiOrUrl ?? null, s.licenseUrl ?? null,
+    s.retrievedAt ?? null, s.fullText ?? null,
+  );
+  return id;
+}
+
+export function getSourceText(db: Db, sourceId: string): string | undefined {
+  const row = db.prepare('SELECT full_text FROM sources WHERE id = ?').get(sourceId) as
+    | { full_text: string | null }
+    | undefined;
+  return row?.full_text ?? undefined;
+}
+
+/**
+ * Stores a parsed lecture and registers it as a citable source.
+ *
+ * The lecture's own text becomes a tier-A source, so a card drawn from a slide
+ * can be verified against that slide exactly like one drawn from a textbook.
+ */
+export function insertLecture(db: Db, doc: LectureDoc): { lectureId: string; sourceId: string } {
+  return transaction(db, () => {
+    const fullText = doc.blocks
+      .map((b) => [b.heading, b.body, b.speakerNotes].filter(Boolean).join('\n'))
+      .join('\n\n');
+
+    const sourceId = insertSource(db, {
+      kind: 'lecture',
+      licenseTier: 'A',
+      groupOrAuthors: 'Course lecture',
+      title: doc.title,
+      doiOrUrl: doc.sourceFile,
+      retrievedAt: new Date().toISOString(),
+      fullText,
+    });
+
+    db.prepare(
+      `INSERT INTO lectures (id, source_id, title, source_file, kind, warnings)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(doc.id, sourceId, doc.title, doc.sourceFile, doc.kind, JSON.stringify(doc.warnings));
+
+    const stmt = db.prepare(
+      `INSERT INTO blocks (id, lecture_id, ordinal, heading, body, speaker_notes, tables_json, image_refs)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const b of doc.blocks) {
+      stmt.run(
+        b.id, doc.id, b.ordinal, b.heading ?? null, b.body,
+        b.speakerNotes ?? null,
+        b.tables ? JSON.stringify(b.tables) : null,
+        b.imageRefs ? JSON.stringify(b.imageRefs) : null,
+      );
+    }
+
+    return { lectureId: doc.id, sourceId };
+  });
+}
+
+export interface NewItem {
+  id?: string;
+  lectureId: string;
+  kind: ItemKind;
+  front: string;
+  back: string;
+  payload?: unknown;
+  blockIds: string[];
+  clientNeed?: string;
+  integratedProcess?: string;
+  njcmmStep?: string;
+  cognitiveLevel?: 'recall' | 'application' | 'analysis';
+  generationId?: string;
+}
+
+export interface NewCitation {
+  sourceId: string;
+  claim: string;
+  excerpt: string;
+  verdict?: CitationVerdict;
+  matchedAt?: number;
+  failureStage?: string;
+  failureDetail?: string;
+}
+
+/** Inserts an item together with its citations, atomically. */
+export function insertItem(db: Db, item: NewItem, citations: NewCitation[]): string {
+  const id = item.id ?? randomUUID();
+  return transaction(db, () => {
+    db.prepare(
+      `INSERT INTO items
+         (id, lecture_id, kind, front, back, payload, client_need, integrated_process,
+          njcmm_step, cognitive_level, generation_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id, item.lectureId, item.kind, item.front, item.back,
+      item.payload === undefined ? null : JSON.stringify(item.payload),
+      item.clientNeed ?? null, item.integratedProcess ?? null,
+      item.njcmmStep ?? null, item.cognitiveLevel ?? null, item.generationId ?? null,
+    );
+
+    const linkBlock = db.prepare('INSERT OR IGNORE INTO item_blocks (item_id, block_id) VALUES (?, ?)');
+    for (const b of item.blockIds) linkBlock.run(id, b);
+
+    const cite = db.prepare(
+      `INSERT INTO citations
+         (id, item_id, source_id, claim, excerpt, matched_at, verdict, failure_stage, failure_detail, checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const c of citations) {
+      cite.run(
+        randomUUID(), id, c.sourceId, c.claim, c.excerpt,
+        c.matchedAt ?? null, c.verdict ?? 'unverified',
+        c.failureStage ?? null, c.failureDetail ?? null,
+        c.verdict && c.verdict !== 'unverified' ? new Date().toISOString() : null,
+      );
+    }
+    return id;
+  });
+}
+
+export function setCitationVerdict(
+  db: Db,
+  citationId: string,
+  verdict: CitationVerdict,
+  detail?: { stage?: string; detail?: string; matchedAt?: number },
+): void {
+  db.prepare(
+    `UPDATE citations
+        SET verdict = ?, failure_stage = ?, failure_detail = ?, matched_at = COALESCE(?, matched_at),
+            checked_at = ?
+      WHERE id = ?`,
+  ).run(
+    verdict, detail?.stage ?? null, detail?.detail ?? null,
+    detail?.matchedAt ?? null, new Date().toISOString(), citationId,
+  );
+}
+
+export function setItemStatus(db: Db, itemId: string, status: ItemStatus): void {
+  db.prepare('UPDATE items SET status = ? WHERE id = ?').run(status, itemId);
+}
+
+export interface ItemRow {
+  id: string;
+  kind: ItemKind;
+  status: ItemStatus;
+  front: string;
+  back: string;
+  payload: unknown;
+  clientNeed?: string;
+  cognitiveLevel?: string;
+  elo: number;
+  verifiedCitations: number;
+  failedCitations: number;
+}
+
+function mapItemRow(r: Record<string, unknown>): ItemRow {
+  const out: ItemRow = {
+    id: String(r['id']),
+    kind: r['kind'] as ItemKind,
+    status: r['status'] as ItemStatus,
+    front: String(r['front']),
+    back: String(r['back']),
+    payload: r['payload'] ? JSON.parse(String(r['payload'])) : undefined,
+    elo: Number(r['elo']),
+    verifiedCitations: Number(r['verified_citations'] ?? 0),
+    failedCitations: Number(r['failed_citations'] ?? 0),
+  };
+  if (r['client_need']) out.clientNeed = String(r['client_need']);
+  if (r['cognitive_level']) out.cognitiveLevel = String(r['cognitive_level']);
+  return out;
+}
+
+// `i.rowid` is selected explicitly: `i.*` omits it, and wrapping this in a
+// subquery would then lose the column that FTS joins and ordering depend on.
+const ITEM_WITH_CITATION_COUNTS = `
+  SELECT i.rowid AS rowid, i.*,
+         (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id AND c.verdict = 'verified') AS verified_citations,
+         (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id AND c.verdict = 'failed')   AS failed_citations
+    FROM items i
+`;
+
+/** Items awaiting triage, newest lecture first. */
+export function listPending(db: Db, lectureId: string): ItemRow[] {
+  const rows = db
+    .prepare(`${ITEM_WITH_CITATION_COUNTS} WHERE i.lecture_id = ? AND i.status = 'pending' ORDER BY i.rowid`)
+    .all(lectureId) as Record<string, unknown>[];
+  return rows.map(mapItemRow);
+}
+
+/**
+ * Items that may actually be studied.
+ *
+ * Both conditions are required and are enforced here rather than by callers:
+ * accepted in triage, and backed by at least one verified citation. This is the
+ * query that makes "every claim is sourced" true in practice.
+ */
+export function listStudiable(db: Db, opts: { lectureId?: string; limit?: number } = {}): ItemRow[] {
+  const where = ["i.status = 'accepted'", 'verified_citations > 0'];
+  const params: unknown[] = [];
+  if (opts.lectureId) {
+    where.push('i.lecture_id = ?');
+    params.push(opts.lectureId);
+  }
+  const sql = `
+    SELECT * FROM (${ITEM_WITH_CITATION_COUNTS}) AS i
+     WHERE ${where.join(' AND ')}
+     ORDER BY rowid
+     ${opts.limit ? 'LIMIT ?' : ''}
+  `;
+  if (opts.limit) params.push(opts.limit);
+  const rows = db.prepare(sql).all(...(params as never[])) as Record<string, unknown>[];
+  return rows.map(mapItemRow);
+}
+
+/**
+ * Accepted items that have NO verified citation.
+ *
+ * This should always be empty. It exists so the condition is queryable: an
+ * unsourced claim reaching the deck becomes a detectable bug with a list
+ * attached, rather than something a user has to notice while revising.
+ */
+export function listUnsourced(db: Db): ItemRow[] {
+  const rows = db
+    .prepare(
+      `SELECT * FROM (${ITEM_WITH_CITATION_COUNTS}) AS i
+        WHERE i.status = 'accepted' AND verified_citations = 0`,
+    )
+    .all() as Record<string, unknown>[];
+  return rows.map(mapItemRow);
+}
+
+export interface CitationRow {
+  id: string;
+  sourceId: string;
+  claim: string;
+  excerpt: string;
+  verdict: CitationVerdict;
+  matchedAt?: number;
+  failureStage?: string;
+  failureDetail?: string;
+  sourceTitle: string;
+  licenseTier: LicenseTier;
+  doiOrUrl?: string;
+}
+
+export function listCitations(db: Db, itemId: string): CitationRow[] {
+  const rows = db
+    .prepare(
+      `SELECT c.*, s.title AS source_title, s.license_tier, s.doi_or_url
+         FROM citations c JOIN sources s ON s.id = c.source_id
+        WHERE c.item_id = ?`,
+    )
+    .all(itemId) as Record<string, unknown>[];
+
+  return rows.map((r) => {
+    const out: CitationRow = {
+      id: String(r['id']),
+      sourceId: String(r['source_id']),
+      claim: String(r['claim']),
+      excerpt: String(r['excerpt']),
+      verdict: r['verdict'] as CitationVerdict,
+      sourceTitle: String(r['source_title']),
+      licenseTier: r['license_tier'] as LicenseTier,
+    };
+    if (r['matched_at'] !== null && r['matched_at'] !== undefined) out.matchedAt = Number(r['matched_at']);
+    if (r['failure_stage']) out.failureStage = String(r['failure_stage']);
+    if (r['failure_detail']) out.failureDetail = String(r['failure_detail']);
+    if (r['doi_or_url']) out.doiOrUrl = String(r['doi_or_url']);
+    return out;
+  });
+}
+
+/** The slides an item was drawn from, for the "where did this come from" link. */
+export function listItemBlocks(db: Db, itemId: string): { id: string; ordinal: number; heading?: string }[] {
+  const rows = db
+    .prepare(
+      `SELECT b.id, b.ordinal, b.heading
+         FROM item_blocks ib JOIN blocks b ON b.id = ib.block_id
+        WHERE ib.item_id = ? ORDER BY b.ordinal`,
+    )
+    .all(itemId) as Record<string, unknown>[];
+  return rows.map((r) => {
+    const out: { id: string; ordinal: number; heading?: string } = {
+      id: String(r['id']),
+      ordinal: Number(r['ordinal']),
+    };
+    if (r['heading']) out.heading = String(r['heading']);
+    return out;
+  });
+}
+
+export function searchItems(db: Db, query: string, limit = 50): ItemRow[] {
+  const rows = db
+    .prepare(
+      `SELECT * FROM (${ITEM_WITH_CITATION_COUNTS}) AS i
+        WHERE rowid IN (SELECT rowid FROM items_fts WHERE items_fts MATCH ?)
+        LIMIT ?`,
+    )
+    .all(query, limit) as Record<string, unknown>[];
+  return rows.map(mapItemRow);
+}
+
+export function listLectures(db: Db): { id: string; title: string; importedAt: string; itemCount: number }[] {
+  const rows = db
+    .prepare(
+      `SELECT l.id, l.title, l.imported_at,
+              (SELECT COUNT(*) FROM items i WHERE i.lecture_id = l.id) AS item_count
+         FROM lectures l ORDER BY l.imported_at DESC`,
+    )
+    .all() as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: String(r['id']),
+    title: String(r['title']),
+    importedAt: String(r['imported_at']),
+    itemCount: Number(r['item_count']),
+  }));
+}

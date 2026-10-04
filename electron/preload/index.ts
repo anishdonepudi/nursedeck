@@ -1,5 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { CHANNELS, type NurseDeckBridge, type SignInProgress } from '@shared/ipc.js';
+import {
+  CHANNELS,
+  type NurseDeckBridge,
+  type SignInProgress,
+  type GenProgress,
+  type GenKind,
+  type AnswerPayload,
+} from '@shared/ipc.js';
 
 /**
  * The only bridge between the renderer and the main process.
@@ -22,6 +29,28 @@ const bridge: NurseDeckBridge = {
   },
 
   openExternal: (url: string) => ipcRenderer.invoke(CHANNELS.openExternal, url),
+
+  pickLecture: () => ipcRenderer.invoke(CHANNELS.pickLecture),
+  importLecture: (filePath: string) => ipcRenderer.invoke(CHANNELS.importLecture, filePath),
+  listLectures: () => ipcRenderer.invoke(CHANNELS.listLectures),
+  generate: (lectureId: string, kinds: GenKind[]) =>
+    ipcRenderer.invoke(CHANNELS.generate, lectureId, kinds),
+  cancelGeneration: () => ipcRenderer.invoke(CHANNELS.generateCancel),
+
+  onGenerateProgress: (cb: (p: GenProgress) => void) => {
+    const listener = (_e: unknown, payload: GenProgress) => cb(payload);
+    ipcRenderer.on(CHANNELS.generateProgress, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.generateProgress, listener);
+  },
+
+  listTriage: (lectureId: string) => ipcRenderer.invoke(CHANNELS.listTriage, lectureId),
+  setItemStatus: (itemId: string, status: 'accepted' | 'rejected') =>
+    ipcRenderer.invoke(CHANNELS.setItemStatus, itemId, status),
+  verifyItem: (itemId: string) => ipcRenderer.invoke(CHANNELS.verifyItem, itemId),
+
+  studyQueue: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyQueue, lectureId),
+  studyStats: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyStats, lectureId),
+  answerCard: (payload: AnswerPayload) => ipcRenderer.invoke(CHANNELS.answerCard, payload),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),
 };
 

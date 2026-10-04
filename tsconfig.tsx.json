@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2023",
+    "paths": {
+      "@core/*": ["./src/core/*"],
+      "@shared/*": ["./src/shared/*"]
+    }
+  }
+}

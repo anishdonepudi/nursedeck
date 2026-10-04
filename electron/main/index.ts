@@ -5,6 +5,7 @@ import { runPreflight, type PreflightReport } from '@core/preflight/checks.js';
 import { launchLogin, waitForLogin } from '@core/preflight/login.js';
 import { clearCliCache, type CliCommand } from '@core/generate/cli-locator.js';
 import { CHANNELS, type SignInProgress, type SignInOutcome } from '@shared/ipc.js';
+import { registerStudyIpc, registerStudyModeIpc, setCliCommand } from '../ipc/study.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +72,9 @@ function registerIpc(): void {
     // the gate is open is picked up without restarting the app.
     clearCliCache();
     lastReport = await runPreflight({ dataDir: dataDir() });
+    // Share the resolved CLI so generation spawns the same binary preflight
+    // validated, rather than re-resolving and possibly finding another.
+    setCliCommand(lastReport.cli?.command);
     return lastReport;
   });
 
@@ -160,6 +164,8 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     registerIpc();
+    registerStudyIpc({ dataDir: dataDir() });
+    registerStudyModeIpc();
     createWindow();
 
     app.on('activate', () => {
