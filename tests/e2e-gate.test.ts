@@ -181,14 +181,31 @@ describe('E2E startup gate', () => {
     expect(exposure.hasRequire).toBe(false);
     expect(exposure.hasProcess).toBe(false);
     expect(exposure.hasIpcRenderer).toBe(false);
-    // Only the named bridge functions, nothing more.
+
+    // The exposed surface is pinned exactly. Adding a capability to the
+    // renderer should require editing this list, so the attack surface cannot
+    // grow by accident.
     expect(exposure.bridgeKeys).toEqual([
+      'answerCard',
       'appInfo',
+      'cancelGeneration',
       'cancelSignIn',
+      'generate',
+      'importLecture',
+      'listLectures',
+      'listTriage',
+      'onGenerateProgress',
       'onSignInProgress',
       'openExternal',
+      'pickLecture',
       'preflight',
+      'setItemStatus',
       'signIn',
+      'startExam',
+      'studyQueue',
+      'studyStats',
+      'submitExam',
+      'verifyItem',
     ]);
   }, 180_000);
 });
