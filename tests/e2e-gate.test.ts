@@ -198,6 +198,7 @@ describe('E2E startup gate', () => {
       'editCard',
       'exportDeck',
       'generate',
+      'importDeck',
       'importLecture',
       'listDeck',
       'listLectures',
@@ -214,6 +215,7 @@ describe('E2E startup gate', () => {
       'studyStats',
       'submitExam',
       'verifyItem',
+      'vouchCard',
     ]);
   }, 180_000);
 });

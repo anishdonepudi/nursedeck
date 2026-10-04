@@ -36,6 +36,8 @@ export const CHANNELS = {
   addCard: 'deck:add',
   editCard: 'deck:edit',
   deleteCard: 'deck:delete',
+  importDeck: 'deck:import',
+  vouchCard: 'deck:vouch',
 } as const;
 
 export type SignInProgress =
@@ -86,7 +88,14 @@ export interface NurseDeckBridge {
   submitExam(examId: string, answers: ExamAnswer[]): Promise<ExamResult>;
   dashboard(lectureId?: string, examDate?: string): Promise<Dashboard>;
   corroborate(itemId: string): Promise<CorroborationReport>;
-  exportDeck(lectureId: string | undefined, format: 'anki-tsv' | 'quizlet-csv'): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
+  exportDeck(
+    lectureId: string | undefined,
+    format: 'anki-tsv' | 'quizlet-csv' | 'apkg',
+  ): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
+  /** Imports a deck somebody else made. Cards land unverified and unstudiable. */
+  importDeck(lectureId: string): Promise<ImportDeckSummary>;
+  /** Records that she stands behind an imported card, making it studiable. */
+  vouchCard(itemId: string): Promise<void>;
   listDeck(lectureId?: string): Promise<DeckCardRow[]>;
   addCard(card: NewUserCard): Promise<string>;
   editCard(edit: CardEdit): Promise<{ requiresReverification: boolean }>;
@@ -322,10 +331,22 @@ export interface DeckCardRow {
   front: string;
   back: string;
   status: 'pending' | 'accepted' | 'rejected' | 'quarantined';
-  authoredBy: 'generated' | 'user';
+  authoredBy: 'generated' | 'user' | 'imported';
+  /** File an imported card came from, so its provenance stays visible. */
+  importedFrom?: string;
   edited: boolean;
   verified: boolean;
   lectureTitle: string;
+}
+
+export interface ImportDeckSummary {
+  /** False when she cancelled the file dialog. */
+  chosen: boolean;
+  filename?: string;
+  imported: number;
+  duplicates: number;
+  /** Lines that were not readable as cards. */
+  unreadable: number;
 }
 
 export interface NewUserCard {

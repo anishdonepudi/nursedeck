@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright';
-import { mkdtemp, mkdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
+import JSZip from 'jszip';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { seedStudiableCard, SEEDED_FRONT } from './fixtures/seed-deck.js';
@@ -206,5 +207,97 @@ describe('E2E: practice exam and progress', () => {
     // would plan her studying around a number we invented.
     const dash = await page.locator('.dash').innerText();
     expect(dash).toMatch(/not enough|limited evidence|no reviews|Workload ahead/i);
+  }, 180_000);
+});
+
+describe('E2E: importing a deck somebody else made', () => {
+  /** Writes a classmate-style Anki text export and stubs the file dialog at it. */
+  async function stubDeckFile(contents: string): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), 'nursedeck-import-'));
+    const path = join(dir, 'classmate-deck.txt');
+    await writeFile(path, contents, 'utf8');
+    return path;
+  }
+
+  const CLASSMATE_DECK = [
+    '#separator:tab',
+    '#html:true',
+    'Which electrolyte imbalance causes tall peaked T waves?\tHyperkalemia',
+    'What is the antidote for magnesium sulfate toxicity?\tCalcium gluconate',
+  ].join('\n');
+
+  it('imports cards but refuses to let them be studied unchecked', async () => {
+    const deckFile = await stubDeckFile(CLASSMATE_DECK);
+    const page = await launchSeeded();
+    await app!.evaluate(async ({ dialog }, filePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
+    }, deckFile);
+
+    await openDeck(page);
+    await page.getByRole('button', { name: 'Import a deck' }).click();
+
+    const imported = page.locator('.card-row', { hasText: 'tall peaked T waves' });
+    await expect.poll(() => imported.count(), { timeout: 20_000 }).toBe(1);
+
+    // Labelled as imported, and explicitly NOT verified. A classmate's deck
+    // carries no evidence, so nothing here may look like a checked card.
+    await expect.poll(() => imported.locator('.pill', { hasText: 'imported' }).count()).toBe(1);
+    expect(await imported.locator('.pill', { hasText: 'needs checking' }).count()).toBe(1);
+
+    // And the app says so in words, not only in a pill.
+    await expect
+      .poll(() => page.locator('.notice').innerText(), { timeout: 10_000 })
+      .toMatch(/cannot be studied|until you check/i);
+  }, 180_000);
+
+  it('becomes studiable only after she keeps it, and says it was her call', async () => {
+    const deckFile = await stubDeckFile(CLASSMATE_DECK);
+    const page = await launchSeeded();
+    await app!.evaluate(async ({ dialog }, filePath) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
+    }, deckFile);
+
+    await openDeck(page);
+    await page.getByRole('button', { name: 'Import a deck' }).click();
+
+    const imported = page.locator('.card-row', { hasText: 'magnesium sulfate toxicity' });
+    await expect.poll(() => imported.count(), { timeout: 20_000 }).toBe(1);
+    await imported.getByRole('button', { name: 'Keep', exact: true }).click();
+
+    // The flag clears only because SHE vouched, and the UI attributes it to her
+    // rather than implying the tool verified anything.
+    await expect
+      .poll(() => imported.locator('.pill', { hasText: 'needs checking' }).count(), { timeout: 15_000 })
+      .toBe(0);
+    await expect
+      .poll(() => page.locator('.notice').innerText(), { timeout: 10_000 })
+      .toMatch(/you checked it|yours now/i);
+  }, 180_000);
+});
+
+describe('E2E: Anki package export', () => {
+  it('writes a real .apkg and withholds unverified cards', async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'nursedeck-apkg-'));
+    const outPath = join(outDir, 'nursedeck.apkg');
+
+    const page = await launchSeeded();
+    await app!.evaluate(async ({ dialog }, filePath) => {
+      dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+    }, outPath);
+
+    await page.locator('.lecture').first().click();
+    const progress = page.getByRole('button', { name: 'Progress' });
+    await expect.poll(() => progress.count(), { timeout: 30_000 }).toBe(1);
+    await progress.click();
+
+    await page.getByRole('button', { name: /Export to Anki/ }).click();
+    await expect
+      .poll(() => page.locator('.dash').innerText(), { timeout: 30_000 })
+      .toMatch(/Exported 1 card/);
+
+    // Opened rather than trusted: a malformed .apkg looks fine until Anki
+    // rejects it, and she would be the one to find out.
+    const zip = await JSZip.loadAsync(await readFile(outPath));
+    expect(Object.keys(zip.files).some((n) => /^collection\.anki2/.test(n))).toBe(true);
   }, 180_000);
 });

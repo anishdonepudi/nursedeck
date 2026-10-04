@@ -38,6 +38,7 @@ export function Deck({ lectureId, lectureTitle, onDone }: Props) {
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const [filter, setFilter] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +112,40 @@ export function Deck({ lectureId, lectureTitle, onDone }: Props) {
     }
   }, [load]);
 
+  const importDeck = useCallback(async () => {
+    setError(undefined);
+    setNotice(undefined);
+    setBusy(true);
+    try {
+      const r = await window.nursedeck.importDeck(lectureId);
+      if (!r.chosen) return;
+
+      const parts = [`Imported ${r.imported} card${r.imported === 1 ? '' : 's'} from ${r.filename}`];
+      if (r.duplicates > 0) parts.push(`${r.duplicates} already here`);
+      if (r.unreadable > 0) parts.push(`${r.unreadable} line(s) unreadable`);
+      // Says plainly that imports are not studiable yet. A classmate's deck
+      // carries no evidence, so the tool must not imply it checked anything.
+      parts.push('Nothing imported can be studied until you check it and keep it.');
+      setNotice(parts.join(' - '));
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [lectureId, load]);
+
+  const vouch = useCallback(async (card: DeckCardRow) => {
+    setError(undefined);
+    try {
+      await window.nursedeck.vouchCard(card.id);
+      setNotice('Kept. That card is yours now, and the deck records that you checked it.');
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [load]);
+
   const visible = filter.trim()
     ? cards.filter((c) =>
         `${c.front} ${c.back}`.toLowerCase().includes(filter.trim().toLowerCase()))
@@ -125,6 +160,9 @@ export function Deck({ lectureId, lectureTitle, onDone }: Props) {
           <h2>Cards in “{lectureTitle}”</h2>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="primary" onClick={startAdd}>Write a card</button>
+            <button type="button" className="ghost" onClick={() => void importDeck()} disabled={busy}>
+              {busy ? 'Importing...' : 'Import a deck'}
+            </button>
             <button type="button" className="ghost" onClick={onDone}>Back</button>
           </div>
         </div>
@@ -141,7 +179,7 @@ export function Deck({ lectureId, lectureTitle, onDone }: Props) {
           onChange={(e) => setFilter(e.target.value)}
         />
 
-        {notice && <p className="hint">{notice}</p>}
+        {notice && <p className="hint notice">{notice}</p>}
         {error && <p className="error">{error}</p>}
 
         {(adding || editingId) && (
@@ -206,11 +244,26 @@ export function Deck({ lectureId, lectureTitle, onDone }: Props) {
                   </div>
                   <div className="card-tags">
                     {c.authoredBy === 'user' && <em className="pill pill-ok">yours</em>}
+                    {c.authoredBy === 'imported' && (
+                      <em className="pill pill-pending" title={`Imported from ${c.importedFrom}`}>
+                        imported
+                      </em>
+                    )}
                     {c.edited && <em className="pill">edited</em>}
                     {!c.verified && <em className="pill pill-pending">needs checking</em>}
                     {c.status === 'pending' && <em className="pill pill-pending">to review</em>}
                   </div>
                   <div className="card-actions">
+                    {/*
+                      An imported card has no evidence behind it, so keeping it
+                      is her decision, recorded as hers. It is the only way one
+                      becomes studiable.
+                    */}
+                    {c.authoredBy === 'imported' && !c.verified && (
+                      <button type="button" className="ghost" onClick={() => void vouch(c)}>
+                        Keep
+                      </button>
+                    )}
                     <button type="button" className="ghost" onClick={() => startEdit(c)}>Edit</button>
                     <button type="button" className="ghost danger" onClick={() => void remove(c)}>
                       Delete

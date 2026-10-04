@@ -70,6 +70,8 @@ const bridge: NurseDeckBridge = {
   addCard: (card: NewUserCard) => ipcRenderer.invoke(CHANNELS.addCard, card),
   editCard: (edit: CardEdit) => ipcRenderer.invoke(CHANNELS.editCard, edit),
   deleteCard: (itemId: string) => ipcRenderer.invoke(CHANNELS.deleteCard, itemId),
+  importDeck: (lectureId: string) => ipcRenderer.invoke(CHANNELS.importDeck, lectureId),
+  vouchCard: (itemId: string) => ipcRenderer.invoke(CHANNELS.vouchCard, itemId),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),
 };
 

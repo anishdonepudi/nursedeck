@@ -60,7 +60,7 @@ export function Dashboard({ lectureId, onDone, onStudy }: Props) {
 
   useEffect(() => { void load(); }, [load]);
 
-  const exportDeck = useCallback(async (format: 'anki-tsv' | 'quizlet-csv') => {
+  const exportDeck = useCallback(async (format: 'anki-tsv' | 'quizlet-csv' | 'apkg') => {
     setExporting(true);
     setExported(undefined);
     try {
@@ -240,8 +240,12 @@ export function Dashboard({ lectureId, onDone, onStudy }: Props) {
           Unverified cards are withheld.
         </p>
         <div className="gate-actions">
+          {/* .apkg keeps the deck and the scheduler preset; the text export does not. */}
+          <button type="button" className="ghost" onClick={() => void exportDeck('apkg')} disabled={exporting}>
+            Export to Anki (.apkg)
+          </button>
           <button type="button" className="ghost" onClick={() => void exportDeck('anki-tsv')} disabled={exporting}>
-            Export for Anki
+            Export as text for Anki
           </button>
           <button type="button" className="ghost" onClick={() => void exportDeck('quizlet-csv')} disabled={exporting}>
             Export as CSV

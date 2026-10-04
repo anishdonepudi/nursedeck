@@ -7,7 +7,7 @@ import { clearCliCache, type CliCommand } from '@core/generate/cli-locator.js';
 import { CHANNELS, type SignInProgress, type SignInOutcome } from '@shared/ipc.js';
 import { registerStudyIpc, registerStudyModeIpc } from '../ipc/study.js';
 import { registerExamIpc } from '../ipc/exam.js';
-import { registerInsightsIpc, registerDeckIpc } from '../ipc/insights.js';
+import { registerInsightsIpc, registerDeckIpc, registerImportIpc } from '../ipc/insights.js';
 import { configureIpcContext, setCliCommand } from '../ipc/context.js';
 
 /**
@@ -181,6 +181,7 @@ if (!app.requestSingleInstanceLock()) {
     registerExamIpc();
     registerInsightsIpc();
     registerDeckIpc();
+    registerImportIpc();
     createWindow();
 
     app.on('activate', () => {
