@@ -345,3 +345,31 @@ describe('table rendering', () => {
     expect(shown).toContain('Respiratory acidosis - pH (7.35-7.45): low');
   });
 });
+
+describe('citation relocation', () => {
+  /**
+   * From a real deck: a card correctly stated "normal osmolality 275-295
+   * mOsm/kg" but cited a neighbouring sentence that did not contain the
+   * numbers. The fact WAS on the slide, so rejecting the card threw away
+   * correct material. Relocation finds the right span; it cannot invent one.
+   */
+  const SLIDE =
+    'Osmolality - number of particles dissolved in the serum (Na+, Urea, glucose).\n' +
+    'Normal Osmolality 275-295 mOsm/kg (Isomolar, Hypomolar, Hypermolar).\n' +
+    'Tonicity describes the effect of a solution on cell volume.';
+
+  it('finds a span carrying the asserted numbers', async () => {
+    const { verifyNumericAgreement } = await import('@core/validate/citation.js');
+    // The quoted span lacks the numbers...
+    expect(verifyNumericAgreement('Normal osmolality is 275-295 mOsm/kg', SLIDE.split('\n')[0]!).ok)
+      .toBe(false);
+    // ...but the slide contains them, so the evidence exists.
+    expect(verifyNumericAgreement('Normal osmolality is 275-295 mOsm/kg', SLIDE).ok).toBe(true);
+  });
+
+  it('CANNOT manufacture evidence that is not on the slide', async () => {
+    const { verifyNumericAgreement } = await import('@core/validate/citation.js');
+    // 300 appears nowhere, so no relocation can rescue this claim.
+    expect(verifyNumericAgreement('Normal osmolality is 275-300 mOsm/kg', SLIDE).ok).toBe(false);
+  });
+});

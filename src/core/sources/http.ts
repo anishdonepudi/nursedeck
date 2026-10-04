@@ -57,6 +57,11 @@ export const DENIED_HOSTS: Record<string, string> = {
   'www.jointcommission.org': 'Bot-check shell; standards text is copyrighted.',
   'www.uptodate.com': 'Subscription service; terms prohibit systematic retrieval.',
   'www.uworld.com': 'Commercial test-prep content.',
+  'www.atitesting.com': 'Commercial test-prep; item banks are copyrighted. Their PUBLIC educator guides on NGN item writing are read by hand, not fetched.',
+  'atitesting.com': 'Commercial test-prep; item banks are copyrighted.',
+  'www.kaptest.com': 'Commercial test-prep content.',
+  'www.archerreview.com': 'Commercial test-prep content.',
+  'www.hesiinet.com': 'Commercial test-prep content.',
   'quizlet.com': 'User-uploaded content of unknown provenance and licence.',
 };
 

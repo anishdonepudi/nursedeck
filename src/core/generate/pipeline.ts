@@ -208,6 +208,35 @@ function toCandidates(kind: GenerationKind, data: unknown): Candidate[] {
 
 /* ------------------------------------------------------------------ */
 
+/**
+ * Finds a span of slide text containing every one of the given numbers.
+ *
+ * Used only to RELOCATE a citation, never to invent one. The span must still
+ * pass the verbatim check against the same slide, so this cannot manufacture
+ * evidence — it can only point at evidence that was already there. On a real
+ * deck this recovered a card about serum osmolality whose "275-295 mOsm/kg"
+ * sat two sentences away from the quoted span.
+ *
+ * If no span on the slide carries the numbers, the claim really is unsupported
+ * and the rejection stands.
+ */
+function findSpanWithNumbers(text: string, numbers: string[]): string | undefined {
+  if (numbers.length === 0) return undefined;
+
+  // Sentence-ish units, then widening windows, so the shortest sufficient span
+  // wins and a citation never balloons into the whole slide.
+  const pieces = text.split(/(?<=[.;:])\s+|\n/).map((p) => p.trim()).filter(Boolean);
+
+  for (let window = 1; window <= 3; window++) {
+    for (let i = 0; i + window <= pieces.length; i++) {
+      const span = pieces.slice(i, i + window).join(' ');
+      if (span.length < 24 || span.length > 400) continue;
+      if (numbers.every((n) => verifyNumericAgreement(n, span).ok)) return span;
+    }
+  }
+  return undefined;
+}
+
 /** The text a citation is checked against: the slide it names. */
 function blockText(b: LectureBlock): string {
   // Tables are rendered exactly as they were shown to the generator. If the two
@@ -326,24 +355,47 @@ export async function generateForLecture(
 
         // 4. Every number asserted must be present in the quote. This is the
         //    check that catches a shifted dose or lab range.
-        const numeric = verifyNumericAgreement(cand.numericClaim, cand.citation.excerpt);
+        let excerpt = cand.citation.excerpt;
+        let matchedAt = verbatim.matchedAt;
+        const numeric = verifyNumericAgreement(cand.numericClaim, excerpt);
+
         if (!numeric.ok) {
-          report.rejected.push({
-            kind, front: cand.front, stage: 'numeric',
-            reason: `States ${numeric.unsupported.map((n) => n.raw).join(', ')}, which the cited text does not contain.`,
-          });
-          continue;
+          // The model sometimes states a value correctly but quotes a nearby
+          // sentence that does not contain it. On a real deck this rejected a
+          // card about serum osmolality whose "275-295 mOsm/kg" was present on
+          // the very same slide. The claim is supported; the citation simply
+          // points at the wrong span, so look for the right one before giving
+          // up. If no span on the slide carries the numbers, the claim really
+          // is unsupported and the rejection stands.
+          const better = findSpanWithNumbers(blockText(block), numeric.unsupported.map((n) => n.raw));
+          const recheck = better ? verifyNumericAgreement(cand.numericClaim, better) : undefined;
+
+          if (better && recheck?.ok) {
+            const reVerbatim = verifyVerbatim(better, blockText(block));
+            if (reVerbatim.ok) {
+              excerpt = better;
+              matchedAt = reVerbatim.matchedAt;
+            }
+          }
+
+          if (!verifyNumericAgreement(cand.numericClaim, excerpt).ok) {
+            report.rejected.push({
+              kind, front: cand.front, stage: 'numeric',
+              reason: `States ${numeric.unsupported.map((n) => n.raw).join(', ')}, which does not appear anywhere on the cited slide.`,
+            });
+            continue;
+          }
         }
 
         const citation: NewCitation = {
           sourceId,
           claim: cand.claim,
-          excerpt: cand.citation.excerpt,
+          excerpt,
           // Deterministic checks passed. The entailment audit runs separately
           // and promotes this to 'verified'.
           verdict: 'unverified',
         };
-        if (verbatim.matchedAt !== undefined) citation.matchedAt = verbatim.matchedAt;
+        if (matchedAt !== undefined) citation.matchedAt = matchedAt;
 
         const id = insertItem(
           db,
