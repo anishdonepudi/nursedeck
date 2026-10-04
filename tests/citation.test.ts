@@ -1,0 +1,174 @@
+import { describe, it, expect } from 'vitest';
+import {
+  normalizeForMatch,
+  verifyVerbatim,
+  extractNumbers,
+  verifyNumericAgreement,
+  verifyLicenseUse,
+} from '@core/validate/citation.js';
+
+/**
+ * These tests encode the anti-hallucination contract. They are deliberately
+ * adversarial: each one represents a way a model has a realistic chance of
+ * producing a citation that looks right but is not.
+ */
+
+// A short stand-in for stored source text, written the way real guideline
+// prose is: curly quotes, en dashes, line wrapping.
+const SOURCE = `Potassium is the major intracellular cation. The normal adult
+serum potassium concentration is 3.5–5.0 mEq/L. Hypokalemia is defined as a
+serum potassium below 3.5 mEq/L, and may cause cardiac dysrhythmias, muscle
+weakness, and ileus. Administer potassium replacement only via a controlled
+infusion; never give potassium chloride by IV push, which is fatal.`;
+
+describe('normalizeForMatch', () => {
+  it('folds typographic variants that do not change meaning', () => {
+    expect(normalizeForMatch('3.5–5.0')).toBe(normalizeForMatch('3.5-5.0'));
+    expect(normalizeForMatch('“quoted”')).toBe(normalizeForMatch('"quoted"'));
+    expect(normalizeForMatch('it’s')).toBe(normalizeForMatch("it's"));
+    expect(normalizeForMatch('a  b')).toBe('a b');
+    expect(normalizeForMatch('  Mixed   CASE\n\tspacing ')).toBe('mixed case spacing');
+  });
+
+  it('strips zero-width characters used to disguise text', () => {
+    expect(normalizeForMatch('pot​assium')).toBe('potassium');
+  });
+});
+
+describe('verifyVerbatim', () => {
+  it('accepts a faithful quote despite dash and case drift', () => {
+    const res = verifyVerbatim(
+      'The normal adult serum potassium concentration is 3.5-5.0 mEq/L',
+      SOURCE,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.matchedAt).toBeGreaterThanOrEqual(0);
+  });
+
+  it('accepts an elided quote when fragments appear in order', () => {
+    const res = verifyVerbatim(
+      'Hypokalemia is defined as ... below 3.5 mEq/L',
+      SOURCE,
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it('REJECTS a fabricated quote that was never in the source', () => {
+    const res = verifyVerbatim(
+      'The normal adult serum potassium concentration is 3.5-5.3 mEq/L',
+      SOURCE,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('quote_not_in_source');
+  });
+
+  it('REJECTS fragments stitched together out of order', () => {
+    // Both fragments exist, but reversing them invents a claim the source
+    // never makes. This is the subtle failure a naive "contains" check misses.
+    const res = verifyVerbatim(
+      'never give potassium chloride by IV push ... Potassium is the major intracellular cation',
+      SOURCE,
+    );
+    expect(res.ok).toBe(false);
+    expect(res.reason).toBe('fragments_out_of_order');
+  });
+
+  it('REJECTS a quote too short to prove anything', () => {
+    expect(verifyVerbatim('potassium', SOURCE).reason).toBe('excerpt_too_short');
+  });
+
+  it('REJECTS an empty excerpt and a missing source', () => {
+    expect(verifyVerbatim('', SOURCE).reason).toBe('empty_excerpt');
+    expect(verifyVerbatim('a sufficiently long excerpt here', undefined).reason)
+      .toBe('source_not_found');
+  });
+});
+
+describe('extractNumbers', () => {
+  it('pulls decimals and ranges', () => {
+    expect(extractNumbers('3.5-5.0 mEq/L').map((n) => n.value)).toEqual([3.5, 5.0]);
+  });
+
+  it('handles thousands separators', () => {
+    expect(extractNumbers('platelets 150,000 to 400,000').map((n) => n.value))
+      .toEqual([150000, 400000]);
+  });
+
+  it('ignores digits glued to letters, which are not measurements', () => {
+    expect(extractNumbers('COVID19 and T2DM').map((n) => n.value)).toEqual([]);
+  });
+});
+
+describe('verifyNumericAgreement', () => {
+  it('passes when every asserted number is present in the citation', () => {
+    const res = verifyNumericAgreement(
+      'Normal serum potassium is 3.5 to 5.0 mEq/L.',
+      'The normal adult serum potassium concentration is 3.5-5.0 mEq/L.',
+    );
+    expect(res.ok).toBe(true);
+  });
+
+  it('CATCHES a shifted lab range — the dangerous nursing hallucination', () => {
+    const res = verifyNumericAgreement(
+      'Normal serum potassium is 3.5 to 5.3 mEq/L.',
+      'The normal adult serum potassium concentration is 3.5-5.0 mEq/L.',
+    );
+    expect(res.ok).toBe(false);
+    expect(res.unsupported.map((n) => n.value)).toEqual([5.3]);
+  });
+
+  it('CATCHES an invented dose', () => {
+    const res = verifyNumericAgreement(
+      'Administer 40 mEq of potassium chloride.',
+      'Administer potassium replacement only via a controlled infusion.',
+    );
+    expect(res.ok).toBe(false);
+    expect(res.unsupported.map((n) => n.value)).toEqual([40]);
+  });
+
+  it('is vacuously true for claims asserting no numbers', () => {
+    expect(
+      verifyNumericAgreement('Never give potassium chloride by IV push.', 'anything').ok,
+    ).toBe(true);
+  });
+});
+
+describe('verifyLicenseUse', () => {
+  it('blocks any content use of a tier D (proprietary) source', () => {
+    const res = verifyLicenseUse({ tier: 'D', claim: 'Risk for decreased cardiac output' });
+    expect(res.ok).toBe(false);
+    expect(res.violation).toBe('tier_d_content_used');
+  });
+
+  it('allows tier A content freely', () => {
+    expect(verifyLicenseUse({ tier: 'A', claim: 'anything at all' }).ok).toBe(true);
+  });
+
+  it('requires a verbatim excerpt for tier B (no-derivatives)', () => {
+    const res = verifyLicenseUse({ tier: 'B', claim: 'Sepsis is a dysregulated host response.' });
+    expect(res.ok).toBe(false);
+    expect(res.violation).toBe('missing_excerpt');
+  });
+
+  it('REJECTS a tier B paraphrase, because ND forbids derivatives', () => {
+    const res = verifyLicenseUse({
+      tier: 'B',
+      claim: 'Sepsis happens when the body overreacts to an infection.',
+      excerpt: 'Sepsis is life-threatening organ dysfunction caused by a dysregulated host response to infection.',
+    });
+    expect(res.ok).toBe(false);
+    expect(res.violation).toBe('tier_b_paraphrased');
+  });
+
+  it('accepts a tier B claim that is the quote itself', () => {
+    const quote =
+      'Sepsis is life-threatening organ dysfunction caused by a dysregulated host response to infection.';
+    expect(verifyLicenseUse({ tier: 'B', claim: quote, excerpt: quote }).ok).toBe(true);
+  });
+
+  it('caps tier C excerpt length to prevent bulk reproduction', () => {
+    const res = verifyLicenseUse({ tier: 'C', claim: 'x', excerpt: 'y'.repeat(301) });
+    expect(res.ok).toBe(false);
+    expect(res.violation).toBe('tier_c_bulk_stored');
+  });
+});

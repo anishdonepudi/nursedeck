@@ -1,0 +1,38 @@
+{
+  "include": [
+    "electron/**/*",
+    "src/core/**/*",
+    "src/shared/**/*",
+    "tests/**/*",
+    "electron.vite.config.ts",
+    "drizzle.config.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": [
+      "ES2023"
+    ],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@core/*": [
+        "./src/core/*"
+      ],
+      "@shared/*": [
+        "./src/shared/*"
+      ]
+    }
+  }
+}
