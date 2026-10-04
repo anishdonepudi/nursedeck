@@ -1,0 +1,117 @@
+name: Build installers
+
+# Builds the macOS .dmg and Windows .exe.
+#
+# The macOS build MUST run on a macOS runner: electron-builder shells out to
+# hdiutil and codesign to produce a .dmg, neither of which exists on Windows or
+# Linux. A free GitHub-hosted macos runner is the cheapest way to get one.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Which installers to build
+        type: choice
+        default: both
+        options: [both, mac, windows]
+
+jobs:
+  build:
+    strategy:
+      # One platform failing should not discard the other's artifact.
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: mac
+            script: dist:mac
+            artifact: NurseDeck-mac-universal
+            pattern: release/*.dmg
+          - os: windows-latest
+            name: windows
+            script: dist:win
+            artifact: NurseDeck-win-x64
+            pattern: release/*.exe
+
+    runs-on: ${{ matrix.os }}
+
+    # Honour the manual platform choice; always build both for a tag.
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      github.event.inputs.platform == 'both' ||
+      github.event.inputs.platform == matrix.name
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` needs the lockfile to be in sync; it is committed.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icon
+        run: node scripts/make-icon.mjs
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Unit tests only. The end-to-end suite drives a real Electron window and
+      # needs a display server, which a headless runner does not have.
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Build installer
+        run: npm run ${{ matrix.script }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
+          retention-days: 30
+
+  # On a tag, collect both installers into a GitHub Release so there is a
+  # stable download link to send rather than a CI artifact URL.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          body: |
+            ## Installing on macOS
+
+            NurseDeck is not signed with an Apple Developer certificate, so
+            macOS will refuse to open it on the first launch.
+
+            1. Open the `.dmg` and drag NurseDeck to Applications.
+            2. In Applications, **right-click NurseDeck and choose Open**
+               (double-clicking will not work the first time).
+            3. Choose **Open** in the dialog. macOS remembers this afterwards.
+
+            If macOS says the app "is damaged and can't be opened", clear the
+            download quarantine flag:
+
+            ```
+            xattr -cr /Applications/NurseDeck.app
+            ```
+
+            ## Before first use
+
+            NurseDeck needs [Claude Code](https://claude.com/claude-code)
+            installed and signed in with a Claude subscription. The app checks
+            this on startup and walks you through signing in.

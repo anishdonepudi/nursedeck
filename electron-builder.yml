@@ -1,0 +1,65 @@
+appId: com.nursedeck.app
+productName: NurseDeck
+copyright: NurseDeck
+
+directories:
+  output: release
+  buildResources: build
+
+# Only the built output and runtime deps ship. Tests, sources and the toolchain
+# are excluded so the installer stays small.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+# Every runtime dependency is pure JavaScript, so there is nothing to rebuild
+# per-platform and no .node binary to unpack from the asar.
+asar: true
+
+mac:
+  category: public.app-category.education
+  icon: build/icon.png
+  # One file that runs on both Apple Silicon and Intel. Possible precisely
+  # because there are no native modules to build per-architecture.
+  target:
+    - target: dmg
+      arch: [universal]
+  # The app is unsigned: signing needs a paid Apple Developer account. Without
+  # it macOS Gatekeeper quarantines the download, so the README documents the
+  # right-click -> Open workaround.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  artifactName: ${productName}-${version}-mac-universal.${ext}
+  # Standard drag-to-Applications layout.
+  contents:
+    - x: 140
+      y: 180
+      type: file
+    - x: 400
+      y: 180
+      type: link
+      path: /Applications
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-win-x64-setup.${ext}
+
+linux:
+  icon: build/icon.png
+  category: Education
+  target:
+    - AppImage
+
+publish: null
