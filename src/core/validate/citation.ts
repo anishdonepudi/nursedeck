@@ -22,20 +22,20 @@ export function normalizeForMatch(input: string): string {
   return input
     .normalize('NFKC')
     // Dashes and minus signs -> hyphen.
-    .replace(/[‐-―−﹘﹣－]/g, '-')
+    .replace(/[\u2010-\u2015\u2212\ufe58\ufe63\uff0d]/g, '-')
     // Quotes -> straight.
-    .replace(/[‘’‚‛′´`]/g, "'")
-    .replace(/[“”„‟″]/g, '"')
+    .replace(/[\u2018\u2019\u201a\u201b\u2032\u00b4`]/g, "'")
+    .replace(/[\u201c\u201d\u201e\u201f\u2033]/g, '"')
     // Zero-width and soft hyphen -> removed.
-    .replace(/[​-‍⁠﻿­]/g, '')
+    .replace(/[\u200b-\u200d\u2060\ufeff\u00ad]/g, '')
     // Any whitespace run (incl. NBSP, newlines) -> single space.
-    .replace(/[\s   -   　]+/g, ' ')
+    .replace(/[\s\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]+/g, ' ')
     .trim()
     .toLowerCase();
 }
 
 /** Ellipsis forms a model may use when eliding part of a quote. */
-const ELLIPSIS = /\s*(?:\.\s*\.\s*\.|…|\[\s*\.\.\.\s*\]|\[\s*…\s*\])\s*/g;
+const ELLIPSIS = /\s*(?:\.\s*\.\s*\.|\u2026|\[\s*\.\.\.\s*\]|\[\s*\u2026\s*\])\s*/g;
 
 export type CitationFailureReason =
   | 'empty_excerpt'

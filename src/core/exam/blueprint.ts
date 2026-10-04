@@ -17,7 +17,7 @@ export interface CategoryWeight {
   /** Published tolerance band. */
   min: number;
   max: number;
-  /** Midpoint — the assembly target. */
+  /** Midpoint -- the assembly target. */
   target: number;
 }
 

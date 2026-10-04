@@ -5,7 +5,7 @@ import { listStudiable, listCitations, listItemBlocks } from '../db/repo.js';
  * Deck export.
  *
  * Her cards should never be trapped in this app. CSV/TSV is the universal
- * format — Anki, Quizlet and every other tool import it — and needs no
+ * format -- Anki, Quizlet and every other tool import it -- and needs no
  * dependency, so it cannot rot.
  *
  * Only studiable items are exported: accepted, and backed by a verified
@@ -86,6 +86,9 @@ export function exportDeck(db: Db, opts: ExportOptions): ExportResult {
       } | undefined;
       if (payload?.options) {
         back = payload.options
+          // Written as escapes rather than literal glyphs: this is the one
+          // place non-ASCII reaches a user-facing file, and escapes keep the
+          // source byte length equal to its character length.
           .map((o) => `${o.isKey ? '✓' : '✗'} ${o.text} — ${o.rationale}`)
           .join(tsv ? '<br>' : '\n');
       }

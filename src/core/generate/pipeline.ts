@@ -18,7 +18,7 @@ import { verifyVerbatim, verifyNumericAgreement } from '../validate/citation.js'
  * Checks run cheapest-first, which is both a cost decision and a correctness
  * one: a card with a fabricated quote is rejected by exact string comparison
  * for free, and never reaches the paid entailment audit. Nothing is marked
- * studiable here — items land as 'pending' for human triage regardless.
+ * studiable here -- items land as 'pending' for human triage regardless.
  */
 
 export type GenerationKind = 'flashcard' | 'cloze' | 'qa' | 'nclex';
@@ -70,13 +70,13 @@ interface Candidate {
   back: string;
   payload?: unknown;
   citation: GeneratedCitation;
-  /** The claim the citation must support — usually the answer. */
+  /** The claim the citation must support -- usually the answer. */
   claim: string;
   /**
    * The subset of the claim whose NUMBERS must appear in the cited text.
    *
    * This differs from `claim` for clinical vignettes. An NCLEX stem legitimately
-   * invents its scenario — "a 72-year-old client", "admitted 2 days ago" — and
+   * invents its scenario -- "a 72-year-old client", "admitted 2 days ago" -- and
    * those numbers will never appear in a lecture slide. Requiring them would
    * reject every well-formed vignette. What must be grounded is the clinical
    * answer: a dose, a threshold, a reference range. So this narrows to the keyed

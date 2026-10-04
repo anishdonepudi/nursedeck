@@ -2,7 +2,7 @@
  * Preflight result types.
  *
  * These live in `shared` rather than in `core/preflight` because the renderer
- * needs to render them, and the renderer must never import from `core` — that
+ * needs to render them, and the renderer must never import from `core` -- that
  * code targets Node and would drag platform APIs into the browser bundle.
  * `core` imports these definitions, not the other way round.
  */

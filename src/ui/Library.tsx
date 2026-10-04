@@ -6,7 +6,7 @@ import type { LectureSummary, GenKind, GenProgress, GenSummary } from '@shared/i
  *
  * Generation is slow and costs model calls, so progress is shown per batch and
  * the run is cancellable. The result deliberately reports what was DISCARDED as
- * prominently as what was kept — a rejection means the citation gate did its
+ * prominently as what was kept -- a rejection means the citation gate did its
  * job, and hiding that would make the tool look like it silently lost content.
  */
 
@@ -24,9 +24,10 @@ interface Props {
   onReview: (lectureId: string) => void;
   onStudy: (lectureId: string) => void;
   onExam: (lectureId: string) => void;
+  onDashboard: (lectureId: string) => void;
 }
 
-export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Props) {
+export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDashboard }: Props) {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const selected = selectedId;
   const setSelected = onSelect;
@@ -94,7 +95,7 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
         <div className="panel-head">
           <h2>Your lectures</h2>
           <button type="button" className="primary" onClick={() => void importFiles()} disabled={!!busy}>
-            {busy === 'importing' ? 'Importing…' : 'Add lecture'}
+            {busy === 'importing' ? 'Importing...' : 'Add lecture'}
           </button>
         </div>
 
@@ -154,7 +155,7 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
               onClick={() => void generate()}
               disabled={!!busy || kinds.length === 0}
             >
-              {busy === 'generating' ? 'Generating…' : 'Generate'}
+              {busy === 'generating' ? 'Generating...' : 'Generate'}
             </button>
 
             {busy === 'generating' && (
@@ -177,6 +178,9 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
                 <button type="button" className="ghost" onClick={() => onExam(current.id)}>
                   Practice exam
                 </button>
+                <button type="button" className="ghost" onClick={() => onDashboard(current.id)}>
+                  Progress
+                </button>
               </>
             )}
           </div>
@@ -185,7 +189,7 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
             <p className="waiting">
               <span className="spinner" aria-hidden="true" />
               {progress.phase === 'validating' ? 'Checking citations' : `Writing ${progress.kind}s`}
-              {' · '}batch {progress.batch} of {progress.totalBatches}
+              {' - '}batch {progress.batch} of {progress.totalBatches}
             </p>
           )}
 
@@ -194,7 +198,7 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
               <p>
                 <strong>{summary.accepted}</strong> card{summary.accepted === 1 ? '' : 's'} ready to review
                 {summary.rejected.length > 0 && (
-                  <> · <strong>{summary.rejected.length}</strong> discarded</>
+                  <> - <strong>{summary.rejected.length}</strong> discarded</>
                 )}
               </p>
               {summary.rejected.length > 0 && (

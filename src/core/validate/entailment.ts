@@ -5,7 +5,7 @@ import { runClaude } from '../generate/claude.js';
  * SUPPORT the claim?
  *
  * Stage one (citation.ts) proves the quote is real. It cannot tell whether the
- * quote is relevant — a model can cite a true sentence that simply does not
+ * quote is relevant -- a model can cite a true sentence that simply does not
  * establish what the flashcard asserts. That is what this catches.
  *
  * The verifier is deliberately ISOLATED. It is a fresh CLI invocation that sees

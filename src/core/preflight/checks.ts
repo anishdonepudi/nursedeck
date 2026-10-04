@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import { locateClaudeCli } from '../generate/cli-locator.js';
 import type {
@@ -141,7 +142,6 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRep
 
   /* 2. Local database engine. */
   try {
-    const { DatabaseSync } = await import('node:sqlite');
     const db = new DatabaseSync(':memory:');
     db.exec('CREATE TABLE t (a INTEGER); INSERT INTO t VALUES (1);');
     const row = db.prepare('SELECT a FROM t').get() as { a: number } | undefined;

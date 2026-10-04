@@ -1,4 +1,5 @@
 import { basename, extname } from 'node:path';
+import mammoth from 'mammoth';
 import { randomUUID } from 'node:crypto';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 
@@ -45,7 +46,7 @@ function toSections(html: string): Section[] {
 
     if (/^h[1-6]$/.test(tag)) {
       // A heading starts a new section, but only once the previous one has
-      // content — consecutive headings would otherwise produce empty blocks.
+      // content -- consecutive headings would otherwise produce empty blocks.
       if (current.heading || current.lines.length > 0 || current.tables.length > 0) {
         sections.push(current);
       }
@@ -82,7 +83,7 @@ function toSections(html: string): Section[] {
 
 /**
  * Very long sections are split so a single block does not become too large to
- * cite precisely — a citation pointing at twenty pages proves little.
+ * cite precisely -- a citation pointing at twenty pages proves little.
  */
 const MAX_BLOCK_CHARS = 4_000;
 
@@ -121,7 +122,6 @@ function splitLongSection(section: Section): Section[] {
 
 export async function ingestDocx(filePath: string): Promise<LectureDoc> {
   const warnings: string[] = [];
-  const mammoth = await import('mammoth');
 
   const result = await mammoth.convertToHtml({ path: filePath });
   for (const message of result.messages) {

@@ -75,7 +75,7 @@ export function registerExamIpc(): void {
 
       const assembled = assembleExam(pool, { length: Math.min(want, pool.length) });
       const examId = randomUUID();
-      const title = `Practice exam · ${new Date().toLocaleDateString()}`;
+      const title = `Practice exam - ${new Date().toLocaleDateString()}`;
 
       db.prepare(
         `INSERT INTO exams (id, title, started_at, blueprint) VALUES (?, ?, datetime('now'), ?)`,

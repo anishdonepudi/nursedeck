@@ -56,7 +56,7 @@ export const CLOZE_SYSTEM = `You write cloze-deletion cards for a nursing studen
 Wrap EXACTLY ONE span per sentence in {{double braces}}.
 
 Choosing the blank is the whole task:
-- Blank the span carrying the information payload — the value, range, dose,
+- Blank the span carrying the information payload -- the value, range, dose,
   drug, finding, or time limit.
 - NEVER blank a word that grammar alone would reveal ("is", "the", "a", "of",
   "patient"). A sentence whose blank can be guessed without knowing the subject
@@ -87,7 +87,7 @@ STEM
   diagnostics. Include only what is needed to answer or to make a distractor
   plausible.
 - End with a focused, POSITIVELY worded lead-in that could be answered with the
-  options covered up. Never use "except", "not", or "least likely" — the one
+  options covered up. Never use "except", "not", or "least likely" -- the one
   exception is an item genuinely about a contraindication.
 - Say "client", never "patient". Say "primary health care provider". If no age
   is given the client is an adult.

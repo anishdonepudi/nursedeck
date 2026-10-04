@@ -39,7 +39,7 @@ export function getCli(): CliCommand | undefined {
  * Claude's only readable directory: app-owned and empty.
  *
  * Lecture text is piped over stdin, so the generator never needs a path into
- * the user's own folders — which is what removes the untrusted-directory
+ * the user's own folders -- which is what removes the untrusted-directory
  * hazard rather than merely mitigating it.
  */
 export function getWorkspaceDir(): string {

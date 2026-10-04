@@ -1,7 +1,7 @@
 /**
  * NGN scoring.
  *
- * NCLEX scoring is polytomous — partial credit — and which rule applies depends
+ * NCLEX scoring is polytomous -- partial credit -- and which rule applies depends
  * on the item type. Two details are routinely got wrong and are handled
  * explicitly here:
  *
@@ -27,7 +27,7 @@ export interface ScoreResult {
 }
 
 /* ------------------------------------------------------------------ */
-/* 0/1 — no penalty. Used where selection count is constrained.        */
+/* 0/1 -- no penalty. Used where selection count is constrained.        */
 /* ------------------------------------------------------------------ */
 
 export function scoreZeroOne(keys: Set<string>, selected: Set<string>): ScoreResult {
@@ -45,7 +45,7 @@ export function scoreZeroOne(keys: Set<string>, selected: Set<string>): ScoreRes
 }
 
 /* ------------------------------------------------------------------ */
-/* +/- — penalised, because selection is unconstrained.                */
+/* +/- -- penalised, because selection is unconstrained.                */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -94,7 +94,7 @@ export function scorePlusMinus(units: PlusMinusUnit[]): ScoreResult {
 }
 
 /* ------------------------------------------------------------------ */
-/* Rationale — all-or-nothing on a linked cause and its effects.        */
+/* Rationale -- all-or-nothing on a linked cause and its effects.        */
 /* ------------------------------------------------------------------ */
 
 export interface RationaleUnit {

@@ -6,7 +6,7 @@ import type { GeneratedFlashcard, GeneratedCloze, GeneratedNclex } from '../gene
  *
  * LLM-written study material is reliably bad without hard constraints, and a
  * nursing certification board reports that up to 60% of items written by HUMAN
- * subject experts never reach usable status — usually from unclear stems or
+ * subject experts never reach usable status -- usually from unclear stems or
  * implausible distractors. So the NBME and PNCB rule sets are implemented as a
  * checker that runs before anything is shown, rather than as prose in a prompt
  * that the model may or may not honour.
@@ -112,7 +112,7 @@ const CLOZE_SPAN = /\{\{([^}]*)\}\}/g;
 
 /**
  * Words that carry no information payload. A blank over one of these is
- * answerable from sentence grammar alone and therefore teaches nothing — the
+ * answerable from sentence grammar alone and therefore teaches nothing -- the
  * single most common failure in auto-generated cloze cards.
  */
 const FUNCTION_WORDS = new Set([

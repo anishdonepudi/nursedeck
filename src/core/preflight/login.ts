@@ -34,8 +34,8 @@ function escapeForPosixShell(s: string): string {
 /**
  * Opens a terminal window running the CLI's login command.
  *
- * The command is built from our own located CLI path plus fixed flags — never
- * from user input — so there is no injection surface here.
+ * The command is built from our own located CLI path plus fixed flags -- never
+ * from user input -- so there is no injection surface here.
  */
 export function launchLogin(cli: CliCommand): LoginLaunch {
   const cliPath = cli.path;
@@ -97,7 +97,7 @@ export function launchLogin(cli: CliCommand): LoginLaunch {
 
 export interface WaitForLoginOptions {
   cli: CliCommand;
-  /** Give up after this long. Default 5 minutes — OAuth plus typing a password. */
+  /** Give up after this long. Default 5 minutes -- OAuth plus typing a password. */
   timeoutMs?: number;
   /** How often to re-check. Default 2s: responsive without hammering the CLI. */
   pollIntervalMs?: number;

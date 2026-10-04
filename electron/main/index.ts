@@ -7,9 +7,18 @@ import { clearCliCache, type CliCommand } from '@core/generate/cli-locator.js';
 import { CHANNELS, type SignInProgress, type SignInOutcome } from '@shared/ipc.js';
 import { registerStudyIpc, registerStudyModeIpc } from '../ipc/study.js';
 import { registerExamIpc } from '../ipc/exam.js';
+import { registerInsightsIpc } from '../ipc/insights.js';
 import { configureIpcContext, setCliCommand } from '../ipc/context.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+/**
+ * Directory of the built main bundle.
+ *
+ * Deliberately NOT named __dirname: electron-vite injects a CommonJS shim when
+ * it sees that identifier, and the injection corrupted the emitted chunk,
+ * surfacing as an unterminated string literal at an unrelated line. Deriving it
+ * from import.meta.url is the ESM-native way regardless.
+ */
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Main process.
@@ -40,12 +49,12 @@ function createWindow(): void {
     backgroundColor: '#0b1020',
     title: 'NurseDeck',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.mjs'),
+      preload: join(moduleDir, '../preload/index.mjs'),
       // Hard isolation: the renderer never gets Node, and reaches the main
       // process only through the named channels declared in the preload.
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // preload needs require() for the contextBridge
+      sandbox: false, // the preload bridge needs Node module resolution
       webSecurity: true,
     },
   });
@@ -62,7 +71,7 @@ function createWindow(): void {
   if (devUrl) {
     void mainWindow.loadURL(devUrl);
   } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    void mainWindow.loadFile(join(moduleDir, '../renderer/index.html'));
   }
 }
 
@@ -170,6 +179,7 @@ if (!app.requestSingleInstanceLock()) {
     registerStudyIpc();
     registerStudyModeIpc();
     registerExamIpc();
+    registerInsightsIpc();
     createWindow();
 
     app.on('activate', () => {

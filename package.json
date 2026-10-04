@@ -9,8 +9,8 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && electron-vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "npm run lint:chars && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "npm run test:unit && npm run test:e2e",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
@@ -20,7 +20,9 @@
     "postinstall": "electron-builder install-app-deps",
     "test:unit": "vitest run --exclude \"tests/e2e-*.test.ts\"",
     "test:e2e": "npm run build && vitest run tests/e2e-gate.test.ts",
-    "demo": "tsx scripts/demo-generate.ts"
+    "demo": "tsx scripts/demo-generate.ts",
+    "demo:corroborate": "tsx scripts/demo-corroborate.ts",
+    "lint:chars": "node scripts/find-bad-chars.mjs src electron tests scripts"
   },
   "devDependencies": {
     "@types/jszip": "^3.4.0",

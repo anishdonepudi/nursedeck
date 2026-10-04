@@ -173,7 +173,7 @@ export async function ingestImages(
     }
   }
 
-  const title = blocks[0]?.heading ?? `Notes · ${basename(usable[0] ?? '', extname(usable[0] ?? ''))}`;
+  const title = blocks[0]?.heading ?? `Notes - ${basename(usable[0] ?? '', extname(usable[0] ?? ''))}`;
 
   return {
     id: randomUUID(),

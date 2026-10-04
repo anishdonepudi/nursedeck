@@ -5,6 +5,7 @@ import { Library } from './Library.js';
 import { Triage } from './Triage.js';
 import { Study } from './Study.js';
 import { Exam } from './Exam.js';
+import { Dashboard } from './Dashboard.js';
 
 /**
  * Root.
@@ -18,7 +19,8 @@ type View =
   | { name: 'library' }
   | { name: 'triage'; lectureId: string }
   | { name: 'study'; lectureId: string }
-  | { name: 'exam'; lectureId?: string };
+  | { name: 'exam'; lectureId?: string }
+  | { name: 'dashboard'; lectureId?: string };
 
 export function App() {
   const [ready, setReady] = useState<PreflightReport>();
@@ -37,7 +39,7 @@ export function App() {
         </button>
         <span className="badge">
           {ready.auth?.email ?? 'signed in'}
-          {ready.auth?.subscriptionType ? ` · ${ready.auth.subscriptionType}` : ''}
+          {ready.auth?.subscriptionType ? ` - ${ready.auth.subscriptionType}` : ''}
         </span>
       </header>
 
@@ -49,6 +51,7 @@ export function App() {
             onReview={(lectureId) => setView({ name: 'triage', lectureId })}
             onStudy={(lectureId) => setView({ name: 'study', lectureId })}
             onExam={(lectureId) => setView({ name: 'exam', lectureId })}
+            onDashboard={(lectureId) => setView({ name: 'dashboard', lectureId })}
           />
         )}
         {view.name === 'triage' && (
@@ -56,6 +59,13 @@ export function App() {
         )}
         {view.name === 'study' && (
           <Study lectureId={view.lectureId} onDone={() => setView({ name: 'library' })} />
+        )}
+        {view.name === 'dashboard' && (
+          <Dashboard
+            {...(view.lectureId ? { lectureId: view.lectureId } : {})}
+            onDone={() => setView({ name: 'library' })}
+            onStudy={() => setView({ name: 'study', lectureId: view.lectureId! })}
+          />
         )}
         {view.name === 'exam' && (
           <Exam

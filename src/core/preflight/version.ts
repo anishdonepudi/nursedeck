@@ -1,4 +1,4 @@
-/** Minimal semver handling — enough to gate on a CLI version, no dependency. */
+/** Minimal semver handling -- enough to gate on a CLI version, no dependency. */
 
 export interface Semver {
   major: number;

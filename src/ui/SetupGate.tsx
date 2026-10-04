@@ -60,13 +60,13 @@ function Remedy({ remedy, onSignIn, signingIn, progress, onCancelSignIn }: Remed
         <div className="remedy">
           <p className="waiting">
             <span className="spinner" aria-hidden="true" />
-            Waiting for you to finish signing in…
+            Waiting for you to finish signing in...
             {progress?.phase === 'waiting' ? ` (checked ${progress.attempt}×)` : ''}
           </p>
           {progress?.phase === 'launched' && !progress.launched && (
             <>
               <p className="hint">
-                NurseDeck could not open a terminal for you. Run this yourself, then come back —
+                NurseDeck could not open a terminal for you. Run this yourself, then come back --
                 this screen will notice automatically.
               </p>
               <CopyRow text={progress.manualCommand} />
@@ -89,7 +89,7 @@ function Remedy({ remedy, onSignIn, signingIn, progress, onCancelSignIn }: Remed
           {remedy === 'login_cli' ? 'Sign in to Claude' : 'Sign in with a Claude subscription'}
         </button>
         <p className="hint">
-          Opens a terminal to complete sign-in. NurseDeck never sees your password — Claude Code
+          Opens a terminal to complete sign-in. NurseDeck never sees your password -- Claude Code
           holds the credentials.
         </p>
       </div>
@@ -195,7 +195,7 @@ export function SetupGate({ onReady }: { onReady: (report: PreflightReport) => v
           ))}
           {!report && checking && (
             <li className="check">
-              <span className="spinner" aria-hidden="true" /> <span>Running checks…</span>
+              <span className="spinner" aria-hidden="true" /> <span>Running checks...</span>
             </li>
           )}
         </ul>
@@ -224,7 +224,7 @@ export function SetupGate({ onReady }: { onReady: (report: PreflightReport) => v
 
         <div className="gate-actions">
           <button type="button" className="ghost" onClick={() => void check()} disabled={checking || signingIn}>
-            {checking ? 'Checking…' : 'Check again'}
+            {checking ? 'Checking...' : 'Check again'}
           </button>
 
           {report?.ok && (

@@ -8,7 +8,7 @@ export interface LectureBlock {
   ordinal: number;
   heading?: string;
   body: string;
-  /** PowerPoint speaker notes — often the richest content in a lecture deck. */
+  /** PowerPoint speaker notes -- often the richest content in a lecture deck. */
   speakerNotes?: string;
   tables?: string[][];
   /** Paths to media extracted from the source, for vision passes. */

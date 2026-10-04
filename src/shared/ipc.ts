@@ -4,7 +4,7 @@ import type { PreflightReport, AuthStatus } from './preflight-types.js';
  * The IPC contract between main and renderer.
  *
  * Channel names live here as constants so main and preload cannot drift apart,
- * and the renderer only ever sees the named functions the preload exposes —
+ * and the renderer only ever sees the named functions the preload exposes --
  * never ipcRenderer itself.
  */
 
@@ -29,6 +29,9 @@ export const CHANNELS = {
   answerCard: 'study:answer',
   examStart: 'exam:start',
   examSubmit: 'exam:submit',
+  dashboard: 'stats:dashboard',
+  corroborate: 'sources:corroborate',
+  exportDeck: 'deck:export',
 } as const;
 
 export type SignInProgress =
@@ -77,6 +80,9 @@ export interface NurseDeckBridge {
   answerCard(payload: AnswerPayload): Promise<void>;
   startExam(lectureId: string | undefined, length: number): Promise<StartedExam>;
   submitExam(examId: string, answers: ExamAnswer[]): Promise<ExamResult>;
+  dashboard(lectureId?: string, examDate?: string): Promise<Dashboard>;
+  corroborate(itemId: string): Promise<CorroborationReport>;
+  exportDeck(lectureId: string | undefined, format: 'anki-tsv' | 'quizlet-csv'): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
 }
 
 export type { PreflightReport, AuthStatus };
@@ -243,4 +249,59 @@ export interface ExamResult {
     }[];
     citation?: { excerpt: string; sourceTitle: string };
   }[];
+}
+
+/* ------------------------------- dashboard -------------------------------- */
+
+export interface TopicReadinessRow {
+  topic: string;
+  readiness: number;
+  low: number;
+  high: number;
+  cardCount: number;
+  reviewCount: number;
+  predictedRecall: number;
+  reliable: boolean;
+}
+
+export interface ForecastPoint {
+  date: string;
+  due: number;
+}
+
+export interface ExamProjectionRow {
+  topic: string;
+  readinessNow: number;
+  projectedRecall: number;
+  cardCount: number;
+  unseenBefore: number;
+  atRisk: boolean;
+}
+
+export interface WeakCard {
+  itemId: string;
+  front: string;
+  lapses?: number;
+  occurrences?: number;
+  meanConfidence?: number;
+}
+
+export interface Dashboard {
+  stats: StudyStats;
+  topics: TopicReadinessRow[];
+  forecast: ForecastPoint[];
+  leeches: WeakCard[];
+  illusions: WeakCard[];
+  projection?: ExamProjectionRow[];
+}
+
+/* ----------------------------- corroboration ------------------------------ */
+
+export interface CorroborationReport {
+  itemId: string;
+  outcome: 'confirmed' | 'conflict' | 'not_found' | 'inconclusive';
+  sourceTitle?: string;
+  sourceUrl?: string;
+  excerpt?: string;
+  detail?: string;
 }

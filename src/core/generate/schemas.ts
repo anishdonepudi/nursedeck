@@ -3,7 +3,7 @@
  *
  * Draft-07 specifically: the Claude CLI's validator rejects newer drafts. Each
  * schema is `additionalProperties: false` so the model cannot smuggle extra
- * fields past validation, and every content type REQUIRES a citation —
+ * fields past validation, and every content type REQUIRES a citation --
  * generation cannot produce an unsourced claim and have it validate.
  */
 

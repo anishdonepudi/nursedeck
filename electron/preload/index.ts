@@ -57,6 +57,12 @@ const bridge: NurseDeckBridge = {
     ipcRenderer.invoke(CHANNELS.examStart, lectureId, length),
   submitExam: (examId: string, answers: ExamAnswer[]) =>
     ipcRenderer.invoke(CHANNELS.examSubmit, examId, answers),
+
+  dashboard: (lectureId?: string, examDate?: string) =>
+    ipcRenderer.invoke(CHANNELS.dashboard, lectureId, examDate),
+  corroborate: (itemId: string) => ipcRenderer.invoke(CHANNELS.corroborate, itemId),
+  exportDeck: (lectureId: string | undefined, format: 'anki-tsv' | 'quizlet-csv') =>
+    ipcRenderer.invoke(CHANNELS.exportDeck, lectureId, format),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),
 };
 

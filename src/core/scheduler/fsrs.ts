@@ -1,4 +1,4 @@
-import { fsrs, generatorParameters, createEmptyCard, Rating, State, type Card, type Grade } from 'ts-fsrs';
+import { fsrs, generatorParameters, createEmptyCard, Rating, type Card, type Grade, type State } from 'ts-fsrs';
 import type { Db } from '../db/index.js';
 
 /**
@@ -178,8 +178,8 @@ export function answerCard(db: Db, input: AnswerInput): CardState {
  * FSRS already models how well SHE knows a card. Elo models how hard the CARD
  * is, which is a different question and the one that surfaces junk: an item
  * everyone answers instantly is trivial, one everyone fails is probably broken
- * or miskeyed. With no pre-calibrated bank — exactly our situation with freshly
- * generated items — Elo is the right tool.
+ * or miskeyed. With no pre-calibrated bank -- exactly our situation with freshly
+ * generated items -- Elo is the right tool.
  */
 const ELO_K = 24;
 /** Nominal learner rating the item is scored against. */
@@ -214,7 +214,7 @@ export interface DueCard {
 /**
  * The review queue: cards due now, then unseen cards.
  *
- * Only ever drawn from items that are accepted AND have a verified citation —
+ * Only ever drawn from items that are accepted AND have a verified citation --
  * the invariant lives in SQL so it cannot be bypassed from here.
  */
 export function dueQueue(
@@ -257,7 +257,7 @@ export interface DeckStats {
   averageRetrievability: number;
   /** mean(confidence) - proportion(correct). Positive means overconfident. */
   calibrationGap?: number;
-  /** Items answered confidently but wrongly — the highest-value review target. */
+  /** Items answered confidently but wrongly -- the highest-value review target. */
   illusionOfKnowing: number;
 }
 
@@ -337,4 +337,5 @@ export function deckStats(db: Db, opts: { lectureId?: string; now?: Date } = {})
   return stats;
 }
 
-export { Rating, State };
+export { Rating };
+export { State } from 'ts-fsrs';

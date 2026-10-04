@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-import { readFile } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 
@@ -309,8 +309,6 @@ export async function ingestPptx(
           warnings.push(`Slide ${index + 1}: referenced image ${mediaPart} is missing.`);
           continue;
         }
-        const { join } = await import('node:path');
-        const { writeFile, mkdir } = await import('node:fs/promises');
         await mkdir(opts.mediaOutDir, { recursive: true });
         const outName = `slide${index + 1}-${mediaCount++}${ext}`;
         const outPath = join(opts.mediaOutDir, outName);

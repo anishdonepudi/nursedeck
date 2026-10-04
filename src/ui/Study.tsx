@@ -146,7 +146,7 @@ export function Study({ lectureId, onDone }: Props) {
   }, [revealed, reveal, answer, onDone]);
 
   if (loading) {
-    return <div className="study"><p className="waiting"><span className="spinner" /> Loading…</p></div>;
+    return <div className="study"><p className="waiting"><span className="spinner" /> Loading...</p></div>;
   }
 
   if (queue.length === 0 || !current) {
@@ -239,7 +239,7 @@ export function Study({ lectureId, onDone }: Props) {
                   <span className="cite-badge">Source</span>
                   <span className="cite-source">
                     {current.citation.sourceTitle}
-                    {current.blocks.length > 0 && ` · slide ${current.blocks.map((b) => b.ordinal).join(', ')}`}
+                    {current.blocks.length > 0 && ` - slide ${current.blocks.map((b) => b.ordinal).join(', ')}`}
                   </span>
                 </div>
                 <blockquote>{current.citation.excerpt}</blockquote>

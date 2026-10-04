@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, extname } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { extractText, getDocumentProxy } from 'unpdf';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 
 /**
@@ -8,7 +9,7 @@ import type { LectureDoc, LectureBlock } from '@shared/types.js';
  *
  * Uses `unpdf` (a maintained pdf.js wrapper) rather than `pdf-parse`, which is
  * unmaintained. One page becomes one block, which matches how lecture PDFs are
- * actually exported from PowerPoint — so a citation to "page 7" lands on the
+ * actually exported from PowerPoint -- so a citation to "page 7" lands on the
  * same content a citation to "slide 7" would.
  */
 
@@ -62,7 +63,6 @@ export async function ingestPdf(filePath: string): Promise<LectureDoc> {
   const warnings: string[] = [];
   const buf = await readFile(filePath);
 
-  const { extractText, getDocumentProxy } = await import('unpdf');
   const pdf = await getDocumentProxy(new Uint8Array(buf));
   const { text } = await extractText(pdf, { mergePages: false });
 

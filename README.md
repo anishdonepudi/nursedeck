@@ -34,6 +34,26 @@ cannot rubber-stamp its own earlier output.
 A card is only ever studiable when you have accepted it **and** its citation is
 verified. That rule is enforced in SQL, not left to the UI.
 
+### Cross-checking against an outside authority
+
+Verifying against your lecture proves the slide says it. That is a different
+question from whether it is *true*, and slides do carry stale values.
+
+So a card can also be cross-checked against free, authoritative sources --
+openFDA (public domain), DailyMed and RxNorm -- which answer with one of:
+
+- **Confirmed** - an independent source states the same thing, and that source
+  is attached as a second citation.
+- **Disagrees** - the official labelling says something incompatible. This is
+  the valuable result: it is surfaced rather than resolved, because we cannot
+  know whether the slide is outdated or the match is simply off.
+- **No official source covers this** - common and fine; plenty of nursing
+  practice is not drug labelling.
+
+Every outbound host is on an explicit allow-list with its published rate limit.
+Sources that forbid automated access are on a deny-list with the reason, so
+nobody re-adds one by accident.
+
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) installed and signed in with a

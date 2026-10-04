@@ -2,6 +2,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
+
 const alias = {
   '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
   '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),

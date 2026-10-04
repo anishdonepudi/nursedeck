@@ -5,7 +5,7 @@ import type { StartedExam, ExamResult, ExamAnswer, ExamSubscore } from '@shared/
  * Practice exam.
  *
  * Mirrors the real sitting: no feedback until the end, and no going back to a
- * previous question. The report that follows is the point — a single score
+ * previous question. The report that follows is the point -- a single score
  * tells her almost nothing, whereas "Prioritize Hypotheses 40%" tells her which
  * reasoning step to work on.
  */
@@ -35,7 +35,7 @@ function Subscores({ title, rows, note }: { title: string; rows: ExamSubscore[];
               {r.percent}%
               {/* Below ~15 items a subscore is noise, so it is labelled rather
                   than presented as a measurement. */}
-              {!r.reliable && <em className="sub-weak"> · only {r.n}</em>}
+              {!r.reliable && <em className="sub-weak"> - only {r.n}</em>}
             </span>
           </li>
         ))}
@@ -140,7 +140,7 @@ export function Exam({ lectureId, onDone }: Props) {
 
           {weakest && !weakest.reliable && (
             <p className="hint">
-              Subscores below are based on few questions each — treat them as a direction,
+              Subscores below are based on few questions each -- treat them as a direction,
               not a measurement.
             </p>
           )}
@@ -187,11 +187,11 @@ export function Exam({ lectureId, onDone }: Props) {
                     key={o.id}
                     className={`option ${o.isKey ? 'option-key' : ''} ${o.chosen && !o.isKey ? 'option-wrong' : ''}`}
                   >
-                    <span className="option-mark">{o.isKey ? '✓' : o.chosen ? '✕' : '·'}</span>
+                    <span className="option-mark">{o.isKey ? '✓' : o.chosen ? '✕' : '-'}</span>
                     <div>
                       <div className="option-text">
                         {o.text}
-                        {o.chosen && <em className="chose"> — you chose this</em>}
+                        {o.chosen && <em className="chose"> -- you chose this</em>}
                       </div>
                       <div className="option-rationale">
                         {o.rationale}
@@ -226,7 +226,7 @@ export function Exam({ lectureId, onDone }: Props) {
           <h2>Practice exam</h2>
           <p className="hint">
             Blueprint-weighted to the 2026 NCLEX-RN test plan. No feedback until you finish,
-            and no going back — same as the real thing.
+            and no going back -- same as the real thing.
           </p>
           <div className="lengths">
             {[10, 25, 50, 85].map((n) => (
@@ -243,7 +243,7 @@ export function Exam({ lectureId, onDone }: Props) {
           {error && <p className="error">{error}</p>}
           <div className="gate-actions">
             <button type="button" className="primary" onClick={() => void start()} disabled={loading}>
-              {loading ? 'Building…' : 'Start exam'}
+              {loading ? 'Building...' : 'Start exam'}
             </button>
             <button type="button" className="ghost" onClick={onDone}>Back</button>
           </div>
@@ -263,7 +263,7 @@ export function Exam({ lectureId, onDone }: Props) {
           {error && <p className="error">{error}</p>}
           <div className="gate-actions">
             <button type="button" className="primary" onClick={() => void submit()} disabled={submitting}>
-              {submitting ? 'Scoring…' : 'Submit exam'}
+              {submitting ? 'Scoring...' : 'Submit exam'}
             </button>
           </div>
         </section>
