@@ -74,18 +74,32 @@ export interface ClaudeOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   cliPath?: string;
+  /**
+   * Grants the Read tool. Needed only for transcribing images, which the CLI
+   * must open itself. Everything else is handed its input over stdin and gets
+   * no tools at all.
+   */
+  allowReadTool?: boolean;
 }
 
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 
-/** Flags that strip all ambient configuration. Order is not significant. */
-function lockdownFlags(): string[] {
+/**
+ * Flags that strip all ambient configuration. Order is not significant.
+ *
+ * `allowRead` is the single, narrow exception: transcribing a photograph
+ * requires the model to open the image. Even then `--restricted` still removes
+ * every command-running tool and WebFetch, and file access stays confined to
+ * the working directories, which for that path is a staging folder holding
+ * nothing but the images being transcribed.
+ */
+function lockdownFlags(allowRead = false): string[] {
   return [
     '--setting-sources', '',      // no user/project/local settings => no ambient hooks
     '--strict-mcp-config',        // ignore every MCP configuration
     '--disable-slash-commands',   // no skills
     '--restricted',               // no command-running tools, no WebFetch
-    '--tools', '',                // no built-in tools at all; we only want JSON back
+    '--tools', allowRead ? 'Read' : '',
     '--permission-mode', 'dontAsk',
     '--permission-prompts', 'none',
   ];
@@ -154,7 +168,7 @@ export async function runClaude<T>(prompt: string, opts: ClaudeOptions): Promise
     '--output-format', 'json',
     '--json-schema', JSON.stringify(opts.schema),
     '--add-dir', opts.workspaceDir,
-    ...lockdownFlags(),
+    ...lockdownFlags(opts.allowReadTool === true),
   ];
   if (opts.model) args.push('--model', opts.model);
   if (opts.maxBudgetUsd !== undefined) args.push('--max-budget-usd', String(opts.maxBudgetUsd));

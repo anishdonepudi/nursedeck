@@ -50,7 +50,7 @@ describe('E2E: import to study', () => {
 
     /* ---------------------------- import ---------------------------- */
 
-    await page.getByRole('button', { name: 'Add PowerPoint' }).click();
+    await page.getByRole('button', { name: 'Add lecture' }).click();
     const lecture = page.locator('.lecture', { hasText: 'Fluid and Electrolyte Balance' });
     await expect.poll(() => lecture.count(), { timeout: 60_000 }).toBe(1);
 
@@ -123,7 +123,7 @@ describe('E2E: import to study', () => {
   it('a verified card becomes studiable and can be answered', async () => {
     const { page } = await launchWithLecture();
 
-    await page.getByRole('button', { name: 'Add PowerPoint' }).click();
+    await page.getByRole('button', { name: 'Add lecture' }).click();
     const lecture = page.locator('.lecture', { hasText: 'Fluid and Electrolyte Balance' });
     await expect.poll(() => lecture.count(), { timeout: 60_000 }).toBe(1);
     await lecture.click();

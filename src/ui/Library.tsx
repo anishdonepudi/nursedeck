@@ -94,13 +94,14 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Pro
         <div className="panel-head">
           <h2>Your lectures</h2>
           <button type="button" className="primary" onClick={() => void importFiles()} disabled={!!busy}>
-            {busy === 'importing' ? 'Importing…' : 'Add PowerPoint'}
+            {busy === 'importing' ? 'Importing…' : 'Add lecture'}
           </button>
         </div>
 
         {lectures.length === 0 ? (
           <p className="hint empty">
-            No lectures yet. Add a PowerPoint to start building study material from it.
+            No lectures yet. Add a PowerPoint, PDF, Word document, or a photo of your notes
+            to start building study material from it.
           </p>
         ) : (
           <ul className="lectures">

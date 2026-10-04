@@ -6,6 +6,10 @@ import {
   listItemBlocks, setItemStatus, setCitationVerdict, getSourceText,
 } from '@core/db/repo.js';
 import { ingestPptx } from '@core/ingest/pptx.js';
+import { ingestPdf } from '@core/ingest/pdf.js';
+import { ingestDocx } from '@core/ingest/docx.js';
+import { ingestImages } from '@core/ingest/image.js';
+import { extname } from 'node:path';
 import { generateForLecture, type GenerationKind } from '@core/generate/pipeline.js';
 import { verifyClaim } from '@core/validate/entailment.js';
 import { CHANNELS } from '@shared/ipc.js';
@@ -21,6 +25,8 @@ import type {
  * could ask the main process to read back.
  */
 
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
+
 /** Held so the UI can cancel an in-flight generation run. */
 let generationAbort: AbortController | undefined;
 
@@ -32,7 +38,11 @@ export function registerStudyIpc(): void {
       title: 'Choose lecture files',
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Lecture files', extensions: ['pptx'] },
+        { name: 'Lecture files', extensions: ['pptx', 'pdf', 'docx', 'png', 'jpg', 'jpeg', 'webp'] },
+        { name: 'PowerPoint', extensions: ['pptx'] },
+        { name: 'PDF', extensions: ['pdf'] },
+        { name: 'Word', extensions: ['docx'] },
+        { name: 'Photos of notes', extensions: ['png', 'jpg', 'jpeg', 'webp'] },
         { name: 'All files', extensions: ['*'] },
       ],
     });
@@ -44,7 +54,22 @@ export function registerStudyIpc(): void {
     const database = await ensureDb();
 
     const mediaOutDir = join(getDataDir(), 'media');
-    const doc = await ingestPptx(filePath, { mediaOutDir });
+    const ext = extname(filePath).toLowerCase();
+
+    // Routed by extension. Photographs are the only path that needs the model,
+    // because transcription is a vision task; the rest parse locally.
+    const doc =
+      ext === '.pdf' ? await ingestPdf(filePath)
+      : ext === '.docx' ? await ingestDocx(filePath)
+      : IMAGE_EXTENSIONS.has(ext)
+        ? await ingestImages([filePath], {
+            workspaceDir: getWorkspaceDir(),
+            mediaOutDir,
+            model: 'sonnet',
+            ...(getCli() ? { cliPath: getCli()!.path } : {}),
+          })
+      : await ingestPptx(filePath, { mediaOutDir });
+
     insertLecture(database, doc);
 
     return {
