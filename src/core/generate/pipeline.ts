@@ -4,7 +4,7 @@ import { insertItem, type NewCitation } from '../db/repo.js';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 import { runClaude, ClaudeError } from './claude.js';
 import {
-  batchBlocks, renderBatch, renderTable,
+  batchBlocks, renderBatch, renderTable, slideText,
   FLASHCARD_SYSTEM, CLOZE_SYSTEM, QA_SYSTEM, NCLEX_SYSTEM,
 } from './prompts.js';
 import {
@@ -238,19 +238,7 @@ function findSpanWithNumbers(text: string, numbers: string[]): string | undefine
 }
 
 /** The text a citation is checked against: the slide it names. */
-function blockText(b: LectureBlock): string {
-  // Tables are rendered exactly as they were shown to the generator. If the two
-  // differed, a model quoting a table row faithfully would fail the verbatim
-  // check through no fault of its own.
-  return [
-    b.heading,
-    b.body,
-    b.tables?.length ? renderTable(b.tables) : undefined,
-    b.speakerNotes,
-  ]
-    .filter(Boolean)
-    .join('\n');
-}
+const blockText = slideText;
 
 export async function generateForLecture(
   db: Db,

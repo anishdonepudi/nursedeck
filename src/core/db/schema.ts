@@ -377,4 +377,22 @@ ALTER TABLE items ADD COLUMN imported_from TEXT;
 CREATE INDEX idx_items_imported ON items (imported_from);
 `,
   },
+  {
+    id: 5,
+    name: 'diagram_transcripts',
+    sql: `
+-- Text read out of a slide's pictures.
+--
+-- Measured on the student's own decks, 18 of 96 slides carry no text at all:
+-- heading, content and nursing note are baked into an image. Those slides
+-- produced nothing, so a third of the acid-base lecture was missing from her
+-- study material.
+--
+-- Kept in its own column rather than appended to body because the provenance
+-- differs: body was parsed out of the file and is certain, while this was read
+-- by a model and could be wrong. Both are citable, and keeping them apart means
+-- the UI can say which one a quote came from.
+ALTER TABLE blocks ADD COLUMN image_text TEXT;
+`,
+  },
 ];

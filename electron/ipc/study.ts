@@ -6,6 +6,7 @@ import {
   listItemBlocks, setItemStatus, setCitationVerdict, getSourceText,
 } from '@core/db/repo.js';
 import { ingestPptx } from '@core/ingest/pptx.js';
+import { transcribeDiagrams } from '@core/ingest/diagram.js';
 import { ingestPdf } from '@core/ingest/pdf.js';
 import { ingestDocx } from '@core/ingest/docx.js';
 import { ingestImages } from '@core/ingest/image.js';
@@ -70,6 +71,26 @@ export function registerStudyIpc(): void {
           })
       : await ingestPptx(filePath, { mediaOutDir });
 
+    // Slides whose entire content is a picture. On her own decks this is 18 of
+    // 96 slides -- a third of the acid-base lecture -- which produced nothing
+    // at all before the pictures were read. Costs a model call per such slide,
+    // so it runs only where the slide has little text of its own.
+    if (doc.blocks.some((b) => (b.imageRefs?.length ?? 0) > 0)) {
+      try {
+        const transcribed = await transcribeDiagrams(doc, {
+          workspaceDir: getWorkspaceDir(),
+          model: 'sonnet',
+          ...(getCli() ? { cliPath: getCli()!.path } : {}),
+        });
+        doc.blocks = transcribed.blocks;
+        doc.warnings = [...doc.warnings, ...transcribed.warnings];
+      } catch (e) {
+        // Never lose the lecture over its pictures: the slide text is already
+        // parsed and is the more reliable half.
+        doc.warnings = [...doc.warnings, `Could not read the slide images: ${(e as Error).message}`];
+      }
+    }
+
     insertLecture(database, doc);
 
     return {
@@ -117,6 +138,9 @@ export function registerStudyIpc(): void {
           body: String(b['body'] ?? ''),
           ...(b['speaker_notes'] ? { speakerNotes: String(b['speaker_notes']) } : {}),
           ...(b['tables_json'] ? { tables: JSON.parse(String(b['tables_json'])) as string[][] } : {}),
+          // Must be carried through, or an image-only slide reaches the
+          // generator empty and the transcript paid for at import is wasted.
+          ...(b['image_text'] ? { imageText: String(b['image_text']) } : {}),
         })),
       };
 

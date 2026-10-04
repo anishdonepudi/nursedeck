@@ -81,8 +81,9 @@ export function insertLecture(db: Db, doc: LectureDoc): { lectureId: string; sou
     ).run(doc.id, sourceId, doc.title, doc.sourceFile, doc.kind, JSON.stringify(doc.warnings));
 
     const stmt = db.prepare(
-      `INSERT INTO blocks (id, lecture_id, ordinal, heading, body, speaker_notes, tables_json, image_refs)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO blocks
+         (id, lecture_id, ordinal, heading, body, speaker_notes, tables_json, image_refs, image_text)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     for (const b of doc.blocks) {
       stmt.run(
@@ -90,6 +91,7 @@ export function insertLecture(db: Db, doc: LectureDoc): { lectureId: string; sou
         b.speakerNotes ?? null,
         b.tables ? JSON.stringify(b.tables) : null,
         b.imageRefs ? JSON.stringify(b.imageRefs) : null,
+        b.imageText ?? null,
       );
     }
 

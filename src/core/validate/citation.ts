@@ -272,6 +272,32 @@ function leadFragment(excerpt: string): string {
   return excerpt.split(ELLIPSIS)[0]?.trim() ?? excerpt.trim();
 }
 
+/**
+ * Structural labels this code adds to slide text. They are not subjects, and
+ * attaching one to a citation actively misleads: an image-only slide produced
+ * "Text in the image: ... Kussmaul Respirations", which names a finding and
+ * still never says which condition it belongs to.
+ */
+const NON_SUBJECT_LINES = new Set(['text in the image:', 'table:', 'speaker notes:']);
+
+/**
+ * The line that names what a slide is about.
+ *
+ * Usually line 0, the slide title. On a slide whose whole content is a picture
+ * there is no title, line 0 is a marker this code wrote, and the real subject
+ * is the first line of the transcript -- so markers are skipped rather than
+ * quoted.
+ */
+function headingOf(lines: string[], before: number): string {
+  for (let i = 0; i < Math.min(before, 4); i++) {
+    const text = tidyAncestor(lines[i] ?? '');
+    if (!text) continue;
+    if (NON_SUBJECT_LINES.has(normalizeForMatch(text))) continue;
+    return text;
+  }
+  return '';
+}
+
 /** How many ancestor lines may be prepended. Beyond this a citation stops being a quote. */
 const MAX_ANCESTORS = 3;
 const MAX_QUALIFIED_CHARS = 600;
@@ -321,7 +347,7 @@ export function qualifyExcerpt(excerpt: string, slideText: string): string {
   // "Labs:" parent still does not say it belongs to fluid volume DEFICIT.
   // Stopping the walk at the first indent-0 bullet dropped it, which is what
   // left several otherwise-good citations unprovable.
-  const heading = lines[0] ? tidyAncestor(lines[0]) : '';
+  const heading = headingOf(lines, at);
   if (heading && !already(heading)) ancestors.push(heading);
 
   if (ancestors.length === 0) return excerpt;

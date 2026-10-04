@@ -13,6 +13,14 @@ export interface LectureBlock {
   tables?: string[][];
   /** Paths to media extracted from the source, for vision passes. */
   imageRefs?: string[];
+  /**
+   * Text transcribed out of this slide's pictures.
+   *
+   * Separate from body because it has a different provenance: it was read by a
+   * model rather than parsed out of the file. It is citable source text all the
+   * same -- see ingest/diagram.ts.
+   */
+  imageText?: string;
 }
 
 export interface LectureDoc {

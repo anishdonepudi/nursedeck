@@ -163,6 +163,30 @@ export function renderTable(rows: string[][]): string {
 }
 
 /**
+ * THE text of one slide. Everything that reads a slide must call this.
+ *
+ * The generator is shown this text and the verifier checks quotes against it,
+ * so if the two ever differ a faithful quote fails verification through nothing
+ * but a formatting mismatch. That has already happened twice -- once when
+ * tables were rendered one way for the model and another for the checker, and
+ * once when a validation script rebuilt them in an older format and reported
+ * six legitimate citations as fabricated. One function, one answer.
+ */
+export function slideText(b: LectureBlock): string {
+  return [
+    b.heading,
+    b.body,
+    b.tables?.length ? renderTable(b.tables) : undefined,
+    // Transcribed from the slide's pictures. On image-only slides this is the
+    // entire content of the slide.
+    b.imageText ? `Text in the image:\n${b.imageText}` : undefined,
+    b.speakerNotes,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
  * Renders a batch of slides for stdin.
  *
  * Slide numbers are explicit and repeated, because the model must cite them and
@@ -180,6 +204,9 @@ export function renderBatch(blocks: LectureBlock[], lectureTitle: string): strin
     if (b.heading) parts.push(`Heading: ${b.heading}`);
     if (b.body) parts.push(b.body);
     if (b.tables?.length) parts.push(renderTable(b.tables));
+    // Marker string must match slideText() exactly, or a model quoting a
+    // transcript line would fail the verbatim check for want of a label.
+    if (b.imageText) parts.push(`Text in the image:\n${b.imageText}`);
     // Speaker notes are usually the richest prose in a deck and are where the
     // "why" lives, so they are offered explicitly rather than merged into body.
     if (b.speakerNotes) parts.push(`Speaker notes: ${b.speakerNotes}`);

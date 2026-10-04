@@ -15,7 +15,7 @@ import { ingestPptx } from '../src/core/ingest/pptx.js';
 import { openDb } from '../src/core/db/index.js';
 import { insertLecture, listPending, listCitations, listItemBlocks } from '../src/core/db/repo.js';
 import { generateForLecture } from '../src/core/generate/pipeline.js';
-import { renderTable } from '../src/core/generate/prompts.js';
+import { slideText } from '../src/core/generate/prompts.js';
 import { verifyVerbatim, verifyNumericAgreement } from '../src/core/validate/citation.js';
 import { checkEntailment } from '../src/core/validate/entailment.js';
 
@@ -92,17 +92,10 @@ for (const file of files) {
       const blocks = listItemBlocks(db, item.id);
       const ordinal = blocks[0]?.ordinal ?? 0;
       const block = byOrdinal.get(ordinal);
-      // Must render tables exactly as the pipeline does. Reconstructing them
-      // differently here made six legitimate table citations look fabricated —
-      // an artefact of this script, not of the generator.
-      const slideText = block
-        ? [
-            block.heading,
-            block.body,
-            block.tables?.length ? renderTable(block.tables) : undefined,
-            block.speakerNotes,
-          ].filter(Boolean).join('\n')
-        : '';
+      // The SAME function the generator and the pipeline use. Rebuilding slide
+      // text here instead once reported six legitimate table citations as
+      // fabricated -- an artefact of this script, not of the generator.
+      const text = block ? slideText(block) : '';
 
       audits.push({
         deck: name,
@@ -112,7 +105,7 @@ for (const file of files) {
         slide: ordinal,
         excerpt: c.excerpt,
         claim: c.claim,
-        verbatimOk: verifyVerbatim(c.excerpt, slideText).ok,
+        verbatimOk: verifyVerbatim(c.excerpt, text).ok,
         numericOk: verifyNumericAgreement(
           item.kind === 'nclex' ? item.back : `${item.front} ${item.back}`,
           c.excerpt,
