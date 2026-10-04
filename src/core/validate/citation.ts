@@ -233,3 +233,94 @@ export function verifyLicenseUse(args: {
 
   return { ok: true };
 }
+
+/* ------------------------- outline qualification ------------------------- */
+
+/**
+ * Lecture slides are indented outlines, and the subject of a bullet is usually
+ * its PARENT, not the bullet itself:
+ *
+ *     Alterations in Sodium          <- heading
+ *       Hyponatremia (<136mEq/L)     <- the condition being described
+ *         - Related to sodium loss or water gain   <- what a model quotes
+ *
+ * A model asked to quote the evidence for "hyponatremia is caused by sodium
+ * loss or water gain" quotes the innermost line, which is accurate but orphaned:
+ * read alone it never names hyponatremia, so it cannot prove the claim. An
+ * adversarial audit of the user's own fluid-and-electrolyte deck failed 9 of 14
+ * items this way, every one of them a correct card with an under-specified
+ * citation.
+ *
+ * The citation is therefore widened to include the ancestry of the quoted line.
+ * This invents nothing: the heading and parent bullets are on the slide, above
+ * the quote, and the elision form makes the gap explicit. The caller re-runs the
+ * verbatim check, so a qualification that does not hold is simply discarded.
+ */
+
+/** Leading-whitespace depth; pptx outlines indent two spaces per level. */
+function indentOf(line: string): number {
+  return /^(\s*)/.exec(line)?.[1]?.length ?? 0;
+}
+
+/** Strips bullet glyphs so an ancestor reads as a phrase, not as "- - x". */
+function tidyAncestor(line: string): string {
+  return line.replace(/^[\s\-•●·*]+/, '').trim();
+}
+
+/** Text before the first elision, which is what locates the quote in the slide. */
+function leadFragment(excerpt: string): string {
+  return excerpt.split(ELLIPSIS)[0]?.trim() ?? excerpt.trim();
+}
+
+/** How many ancestor lines may be prepended. Beyond this a citation stops being a quote. */
+const MAX_ANCESTORS = 3;
+const MAX_QUALIFIED_CHARS = 600;
+
+/**
+ * Returns `excerpt` prefixed with the heading and parent bullets that give it a
+ * subject, or the original excerpt when nothing useful can be added.
+ *
+ * The result is NOT trusted: callers must re-verify it against the same slide.
+ */
+export function qualifyExcerpt(excerpt: string, slideText: string): string {
+  const lead = leadFragment(excerpt);
+  if (!lead) return excerpt;
+
+  const lines = slideText.split('\n');
+  const needle = normalizeForMatch(lead).slice(0, 40);
+  if (!needle) return excerpt;
+
+  const at = lines.findIndex((l) => normalizeForMatch(l).includes(needle));
+  // Not found (the quote spans a line break differently) or already the heading.
+  if (at <= 0) return excerpt;
+
+  const ancestors: string[] = [];
+  let depth = indentOf(lines[at]!);
+
+  for (let i = at - 1; i >= 0 && ancestors.length < MAX_ANCESTORS; i--) {
+    const line = lines[i]!;
+    if (!line.trim()) continue;
+    const ind = indentOf(line);
+    // Line 0 is the slide heading, which sits above the outline structurally
+    // even though pptx gives it no indentation. It is the subject of last
+    // resort -- "Antidiuretic Hormone" is what makes "is a water retainer"
+    // mean anything.
+    const isHeading = i === 0;
+    if (!isHeading && ind >= depth) continue;
+
+    const text = tidyAncestor(line);
+    depth = ind;
+
+    // Skip anything already inside the quote, and anything too thin to add a
+    // subject ("S & S" survives at 5 chars; a stray "-" does not).
+    if (text.length >= 3 && !normalizeForMatch(excerpt).includes(normalizeForMatch(text))) {
+      ancestors.push(text);
+    }
+    if (isHeading || ind === 0) break;
+  }
+
+  if (ancestors.length === 0) return excerpt;
+
+  const qualified = [...ancestors.reverse(), excerpt.trim()].join(' ... ');
+  return qualified.length <= MAX_QUALIFIED_CHARS ? qualified : excerpt;
+}

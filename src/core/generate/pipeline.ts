@@ -13,7 +13,7 @@ import {
   type GeneratedCitation,
 } from './schemas.js';
 import { checkFlashcard, checkCloze, checkNclex, type QualityIssue } from '../validate/quality.js';
-import { verifyVerbatim, verifyNumericAgreement } from '../validate/citation.js';
+import { verifyVerbatim, verifyNumericAgreement, qualifyExcerpt } from '../validate/citation.js';
 
 /**
  * Lecture -> verified study items.
@@ -384,6 +384,20 @@ export async function generateForLecture(
               reason: `States ${numeric.unsupported.map((n) => n.raw).join(', ')}, which does not appear anywhere on the cited slide.`,
             });
             continue;
+          }
+        }
+
+        // 5. Widen the quote to carry the heading and parent bullets that give
+        //    it a subject. A bullet lifted out of an indented outline is
+        //    accurate but unprovable on its own -- see qualifyExcerpt. The
+        //    widened quote is re-verified against the same slide, so a
+        //    qualification that does not actually hold is discarded.
+        const qualified = qualifyExcerpt(excerpt, blockText(block));
+        if (qualified !== excerpt) {
+          const q = verifyVerbatim(qualified, blockText(block));
+          if (q.ok && verifyNumericAgreement(cand.numericClaim, qualified).ok) {
+            excerpt = qualified;
+            matchedAt = q.matchedAt;
           }
         }
 

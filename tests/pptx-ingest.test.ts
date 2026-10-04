@@ -129,3 +129,27 @@ describe('ingestPptx — error handling', () => {
     await expect(ingestPptx(bad)).rejects.toThrow(/not a valid powerpoint/i);
   });
 });
+
+describe('ingestPptx — multi-run paragraphs', () => {
+  /**
+   * PowerPoint splits one visible line into a run per formatting change, and
+   * the inter-word space often ends up at the end of a run or alone in one.
+   * Trimming each run before joining produced "Normal Osmolality275-295mOsm",
+   * which looks harmless but is not: the numeric verifier ignores digits glued
+   * to letters, so it could not see 275 or 295 and rejected a correct card
+   * about serum osmolality as unsupported.
+   */
+  it('preserves the spaces that separate runs', () => {
+    const slide = doc.blocks.find((b) => b.body.includes('Osmolality'));
+    expect(slide).toBeDefined();
+    expect(slide!.body).toContain('Normal Osmolality 275-295 mOsm/kg');
+    expect(slide!.body).not.toContain('Osmolality275');
+  });
+
+  it('leaves the numbers visible to the numeric verifier', async () => {
+    const { verifyNumericAgreement } = await import('@core/validate/citation.js');
+    const slide = doc.blocks.find((b) => b.body.includes('Osmolality'))!;
+    const line = slide.body.split('\n').find((l) => l.includes('Osmolality'))!;
+    expect(verifyNumericAgreement('Normal osmolality is 275-295 mOsm/kg', line).ok).toBe(true);
+  });
+});

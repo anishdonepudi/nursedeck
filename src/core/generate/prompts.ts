@@ -26,6 +26,14 @@ CITATION RULES (these are checked mechanically; an item that fails is discarded)
   appear in their original order.
 - The excerpt must be long enough to prove the claim (roughly 25 characters or
   more) and must actually establish it, not merely sit near it.
+- THE EXCERPT MUST NAME ITS OWN SUBJECT. Slides put the condition, drug, or
+  population on a heading or an earlier bullet and the detail underneath, so a
+  quote of the detail alone proves nothing. Ask yourself: reading ONLY this
+  excerpt, with the slide hidden, could someone tell what it is about? If not,
+  quote both parts and join them with "..." --
+    "Hyperkalemia (>5.0%) ... Tall peaked T waves, flat p waves, widened QRS"
+  Both fragments must be copied verbatim and must appear in that order on the
+  slide. This is the single most common reason a correct item gets discarded.
 - Every number, dose, unit, range and timeframe you state must appear in the
   excerpt you cite. If a slide does not give a number, do not supply one from
   your own knowledge.

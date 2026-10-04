@@ -5,6 +5,7 @@ import {
   extractNumbers,
   verifyNumericAgreement,
   verifyLicenseUse,
+  qualifyExcerpt,
 } from '@core/validate/citation.js';
 
 /**
@@ -170,5 +171,65 @@ describe('verifyLicenseUse', () => {
     const res = verifyLicenseUse({ tier: 'C', claim: 'x', excerpt: 'y'.repeat(301) });
     expect(res.ok).toBe(false);
     expect(res.violation).toBe('tier_c_bulk_stored');
+  });
+});
+
+describe('qualifyExcerpt — outline ancestry', () => {
+  /**
+   * Verbatim text from the user's Alterations in Sodium slide. The bullet the
+   * model quoted is true but never names hyponatremia; the condition is the
+   * parent bullet. An adversarial audit failed 9 of 14 items this way.
+   */
+  const SODIUM = [
+    'Alterations in Sodium',
+    'Hyponatremia (<136mEq/L)',
+    '  - Related to sodium loss or water gain',
+    '  - S & S',
+    '    - Poor skin turgor, dry mucous membranes, Headache',
+    'Hypernatremia (>145mEq/L)',
+    '  - Related to sodium gain or water loss',
+  ].join('\n');
+
+  it('prepends the parent bullet that names the condition', () => {
+    const q = qualifyExcerpt('Related to sodium loss or water gain', SODIUM);
+    expect(q).toContain('Hyponatremia');
+    expect(q).toContain('Related to sodium loss or water gain');
+    // Still a real quote: every fragment must be on the slide, in order.
+    expect(verifyVerbatim(q, SODIUM).ok).toBe(true);
+  });
+
+  it('distinguishes the two conditions on the same slide', () => {
+    // The hyper- bullet must inherit the hyper- parent, not the hypo- one.
+    const q = qualifyExcerpt('Related to sodium gain or water loss', SODIUM);
+    expect(q).toContain('Hypernatremia');
+    expect(q).not.toContain('Hyponatremia');
+    expect(verifyVerbatim(q, SODIUM).ok).toBe(true);
+  });
+
+  it('walks more than one level up for a nested finding', () => {
+    const q = qualifyExcerpt('Poor skin turgor, dry mucous membranes, Headache', SODIUM);
+    expect(q).toContain('Hyponatremia');
+    expect(q).toContain('S & S');
+    expect(verifyVerbatim(q, SODIUM).ok).toBe(true);
+  });
+
+  it('uses the heading when the quote is already top-level', () => {
+    const adh = 'Antidiuretic Hormone\nIs a "water retainer" or vasopressin\nIt is made in the hypothalamus';
+    const q = qualifyExcerpt('Is a "water retainer" or vasopressin', adh);
+    expect(q).toContain('Antidiuretic Hormone');
+    expect(verifyVerbatim(q, adh).ok).toBe(true);
+  });
+
+  it('keeps the original quote intact when it already carries its subject', () => {
+    // The slide title may still be prepended -- harmless, and it is on the
+    // slide -- but the quoted text itself must survive unaltered.
+    const q = qualifyExcerpt('Hyponatremia (<136mEq/L)', SODIUM);
+    expect(q).toContain('Hyponatremia (<136mEq/L)');
+    expect(verifyVerbatim(q, SODIUM).ok).toBe(true);
+  });
+
+  it('cannot attach ancestry to a quote that is not on the slide', () => {
+    const q = qualifyExcerpt('Related to potassium loss', SODIUM);
+    expect(q).toBe('Related to potassium loss');
   });
 });

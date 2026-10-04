@@ -20,7 +20,15 @@ interface SlideSpec {
   /** Part name, e.g. 'slide1.xml'. */
   part: string;
   title: string;
-  bullets: { text: string; level?: number }[];
+  /**
+   * A bullet is either plain text, or an explicit list of <a:t> runs.
+   *
+   * Runs matter: PowerPoint splits one visible line at every formatting
+   * change, and the inter-word space often sits at the end of a run or in a
+   * run of its own. Trimming runs before joining welds words to numbers, so a
+   * fixture that only ever emits one run per line cannot catch that bug.
+   */
+  bullets: { text?: string; runs?: string[]; level?: number }[];
   notes?: string;
   table?: string[][];
   /** Adds an image relationship pointing at this media part. */
@@ -36,8 +44,16 @@ function escapeXml(s: string): string {
 }
 
 function paragraph(text: string, level = 0): string {
+  return paragraphRuns([text], level);
+}
+
+/** Emits one <a:p> whose visible text is split across several <a:t> runs. */
+function paragraphRuns(runs: string[], level = 0): string {
   const pPr = level > 0 ? `<a:pPr lvl="${level}"/>` : '';
-  return `<a:p>${pPr}<a:r><a:t>${escapeXml(text)}</a:t></a:r></a:p>`;
+  const body = runs
+    .map((r) => `<a:r><a:rPr lang="en-US"/><a:t>${escapeXml(r)}</a:t></a:r>`)
+    .join('');
+  return `<a:p>${pPr}${body}</a:p>`;
 }
 
 function tableXml(rows: string[][]): string {
@@ -62,7 +78,7 @@ function slideXml(spec: SlideSpec): string {
     `<p:sp><p:nvSpPr><p:cNvPr id="3" name="Content"/><p:cNvSpPr/>` +
     `<p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/>` +
     `<p:txBody><a:bodyPr/><a:lstStyle/>` +
-    spec.bullets.map((b) => paragraph(b.text, b.level ?? 0)).join('') +
+    spec.bullets.map((b) => paragraphRuns(b.runs ?? [b.text ?? ''], b.level ?? 0)).join('') +
     `</p:txBody></p:sp>`;
 
   const pic = spec.image
@@ -134,7 +150,13 @@ export async function buildTestPptx(outPath: string): Promise<BuiltDeck> {
       // Named slide2 but listed SECOND... by coincidence; still resolved by rId.
       part: 'slide2.xml',
       title: 'Potassium Reference Ranges',
-      bullets: [{ text: 'Normal adult serum potassium is 3.5-5.0 mEq/L' }],
+      bullets: [
+        { text: 'Normal adult serum potassium is 3.5-5.0 mEq/L' },
+        // Run split copied verbatim from the user's own deck (slide 10 of
+        // "Fluid and Electrolyte Balance"), where underlining the value put
+        // the surrounding spaces into runs of their own.
+        { runs: ['Normal Osmolality ', '275-295', ' ', 'mOsm', '/kg'] },
+      ],
       table: [
         ['Analyte', 'Low', 'High', 'Unit'],
         ['Potassium', '3.5', '5.0', 'mEq/L'],

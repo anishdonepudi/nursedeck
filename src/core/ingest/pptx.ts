@@ -31,7 +31,15 @@ const parser = new XMLParser({
   // Keep single elements as objects; we normalise with toArray() below.
   isArray: () => false,
   parseTagValue: false,
-  trimValues: true,
+  // MUST stay false. PowerPoint splits a single visible line into many <a:t>
+  // runs at every formatting change, and the space between words frequently
+  // lands at the end of one run or in a run of its own:
+  //   <a:t>Normal Osmolality </a:t><a:t>275-295</a:t><a:t> </a:t><a:t>mOsm</a:t>
+  // Trimming each run concatenates that to "Normal Osmolality275-295mOsm",
+  // which silently corrupts the lecture text. It cost a real card: the numeric
+  // verifier could not see "275" glued to a letter, so a correct osmolality
+  // card was rejected as unsupported. Lines are trimmed as whole lines below.
+  trimValues: false,
 });
 
 function toArray<T>(v: T | T[] | undefined): T[] {
