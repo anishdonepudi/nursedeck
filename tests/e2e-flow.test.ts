@@ -106,10 +106,17 @@ describe('E2E: import to study', () => {
     }
     await page.getByRole('button', { name: /Done|Back/ }).click();
 
+    // The lecture must still be selected after returning — otherwise the next
+    // assertion would pass merely because no lecture panel is shown, which is
+    // exactly how an earlier version of this test passed for the wrong reason.
+    const lectureRow = page.locator('.lecture', { hasText: 'Fluid and Electrolyte Balance' });
+    await expect.poll(() => lectureRow.getAttribute('class'), { timeout: 30_000 })
+      .toContain('lecture-selected');
+    expect(await page.locator('.kinds').count()).toBe(1);
+
     // The kept card is accepted but its citation is still unverified, so it is
     // NOT studiable. This is the accuracy guarantee visible in the UI.
-    const lectureRow = page.locator('.lecture', { hasText: 'Fluid and Electrolyte Balance' });
-    await expect.poll(() => lectureRow.textContent(), { timeout: 30_000 }).not.toContain('ready');
+    await expect.poll(() => lectureRow.textContent()).not.toContain('ready');
     expect(await page.getByRole('button', { name: 'Study' }).count()).toBe(0);
   }, 900_000);
 

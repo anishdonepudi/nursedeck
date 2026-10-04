@@ -4,6 +4,7 @@ import { SetupGate } from './SetupGate.js';
 import { Library } from './Library.js';
 import { Triage } from './Triage.js';
 import { Study } from './Study.js';
+import { Exam } from './Exam.js';
 
 /**
  * Root.
@@ -16,11 +17,15 @@ import { Study } from './Study.js';
 type View =
   | { name: 'library' }
   | { name: 'triage'; lectureId: string }
-  | { name: 'study'; lectureId: string };
+  | { name: 'study'; lectureId: string }
+  | { name: 'exam'; lectureId?: string };
 
 export function App() {
   const [ready, setReady] = useState<PreflightReport>();
   const [view, setView] = useState<View>({ name: 'library' });
+  // Held here, not in Library, so returning from triage or study does not
+  // silently deselect the lecture she was working on.
+  const [selectedLecture, setSelectedLecture] = useState<string>();
 
   if (!ready) return <SetupGate onReady={setReady} />;
 
@@ -39,8 +44,11 @@ export function App() {
       <main className="shell-body">
         {view.name === 'library' && (
           <Library
+            {...(selectedLecture ? { selectedId: selectedLecture } : {})}
+            onSelect={setSelectedLecture}
             onReview={(lectureId) => setView({ name: 'triage', lectureId })}
             onStudy={(lectureId) => setView({ name: 'study', lectureId })}
+            onExam={(lectureId) => setView({ name: 'exam', lectureId })}
           />
         )}
         {view.name === 'triage' && (
@@ -48,6 +56,12 @@ export function App() {
         )}
         {view.name === 'study' && (
           <Study lectureId={view.lectureId} onDone={() => setView({ name: 'library' })} />
+        )}
+        {view.name === 'exam' && (
+          <Exam
+            {...(view.lectureId ? { lectureId: view.lectureId } : {})}
+            onDone={() => setView({ name: 'library' })}
+          />
         )}
       </main>
     </div>

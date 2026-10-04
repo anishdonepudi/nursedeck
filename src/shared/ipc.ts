@@ -27,6 +27,8 @@ export const CHANNELS = {
   studyQueue: 'study:queue',
   studyStats: 'study:stats',
   answerCard: 'study:answer',
+  examStart: 'exam:start',
+  examSubmit: 'exam:submit',
 } as const;
 
 export type SignInProgress =
@@ -73,6 +75,8 @@ export interface NurseDeckBridge {
   studyQueue(lectureId?: string): Promise<StudyCard[]>;
   studyStats(lectureId?: string): Promise<StudyStats>;
   answerCard(payload: AnswerPayload): Promise<void>;
+  startExam(lectureId: string | undefined, length: number): Promise<StartedExam>;
+  submitExam(examId: string, answers: ExamAnswer[]): Promise<ExamResult>;
 }
 
 export type { PreflightReport, AuthStatus };
@@ -166,4 +170,77 @@ export interface AnswerPayload {
   correct?: boolean;
   durationMs?: number;
   mode?: 'review' | 'type' | 'cloze' | 'exam' | 'match';
+}
+
+/* --------------------------------- exams ---------------------------------- */
+
+export interface ExamOption {
+  id: string;
+  text: string;
+}
+
+export interface ExamQuestion {
+  itemId: string;
+  position: number;
+  stem: string;
+  itemType: 'multiple_choice' | 'select_all' | 'select_n';
+  selectN?: number;
+  options: ExamOption[];
+  clientNeed?: string;
+}
+
+export interface ExamBlueprintRow {
+  clientNeed: string;
+  target: number;
+  actual: number;
+  inBand: boolean;
+}
+
+export interface StartedExam {
+  examId: string;
+  title: string;
+  questions: ExamQuestion[];
+  blueprint: ExamBlueprintRow[];
+  shortfalls: string[];
+  estimatedMinutes: number;
+}
+
+export interface ExamAnswer {
+  itemId: string;
+  selected: string[];
+  durationMs?: number;
+}
+
+export interface ExamSubscore {
+  label: string;
+  earned: number;
+  possible: number;
+  percent: number;
+  n: number;
+  reliable: boolean;
+}
+
+export interface ExamResult {
+  pointsEarned: number;
+  pointsPossible: number;
+  percent: number;
+  byClientNeed: ExamSubscore[];
+  byNjcmmStep: ExamSubscore[];
+  byCognitiveLevel: ExamSubscore[];
+  byItemType: ExamSubscore[];
+  overSelectionRate?: number;
+  estimatedMinutes: number;
+  actualMinutes: number;
+  /** Per-question review, with the scoring arithmetic made explicit. */
+  review: {
+    itemId: string;
+    stem: string;
+    earned: number;
+    possible: number;
+    options: {
+      id: string; text: string; isKey: boolean; chosen: boolean;
+      rationale: string; errorClass?: string;
+    }[];
+    citation?: { excerpt: string; sourceTitle: string };
+  }[];
 }

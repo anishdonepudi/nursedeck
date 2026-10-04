@@ -6,6 +6,7 @@ import {
   type GenProgress,
   type GenKind,
   type AnswerPayload,
+  type ExamAnswer,
 } from '@shared/ipc.js';
 
 /**
@@ -51,6 +52,11 @@ const bridge: NurseDeckBridge = {
   studyQueue: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyQueue, lectureId),
   studyStats: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyStats, lectureId),
   answerCard: (payload: AnswerPayload) => ipcRenderer.invoke(CHANNELS.answerCard, payload),
+
+  startExam: (lectureId: string | undefined, length: number) =>
+    ipcRenderer.invoke(CHANNELS.examStart, lectureId, length),
+  submitExam: (examId: string, answers: ExamAnswer[]) =>
+    ipcRenderer.invoke(CHANNELS.examSubmit, examId, answers),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),
 };
 

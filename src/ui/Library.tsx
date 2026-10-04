@@ -18,13 +18,18 @@ const KINDS: { id: GenKind; label: string; hint: string }[] = [
 ];
 
 interface Props {
+  /** Owned by App so it survives navigating to triage and back. */
+  selectedId?: string;
+  onSelect: (lectureId: string) => void;
   onReview: (lectureId: string) => void;
   onStudy: (lectureId: string) => void;
+  onExam: (lectureId: string) => void;
 }
 
-export function Library({ onReview, onStudy }: Props) {
+export function Library({ selectedId, onSelect, onReview, onStudy, onExam }: Props) {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
-  const [selected, setSelected] = useState<string>();
+  const selected = selectedId;
+  const setSelected = onSelect;
   const [kinds, setKinds] = useState<GenKind[]>(['flashcard', 'cloze']);
   const [busy, setBusy] = useState<'importing' | 'generating'>();
   const [progress, setProgress] = useState<GenProgress>();
@@ -164,9 +169,14 @@ export function Library({ onReview, onStudy }: Props) {
             )}
 
             {current.studiableCount > 0 && !busy && (
-              <button type="button" className="ghost" onClick={() => onStudy(current.id)}>
-                Study
-              </button>
+              <>
+                <button type="button" className="ghost" onClick={() => onStudy(current.id)}>
+                  Study
+                </button>
+                <button type="button" className="ghost" onClick={() => onExam(current.id)}>
+                  Practice exam
+                </button>
+              </>
             )}
           </div>
 

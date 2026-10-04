@@ -4,6 +4,36 @@ Local-first, evidence-cited study tool for nursing students. Upload lecture
 slides; NurseDeck uses the Claude Code CLI to turn them into flashcards, Q&A,
 NCLEX-style questions and practice exams — **with a citation on every claim.**
 
+## What it does
+
+1. **Import** a lecture PowerPoint. Slide order, speaker notes, tables and
+   images are extracted.
+2. **Generate** flashcards, fill-in-the-blank cards, short-answer questions and
+   NCLEX-style vignettes from it.
+3. **Review** every generated card before it enters your deck, with the quote
+   it is based on shown alongside.
+4. **Study** with FSRS-6 spaced repetition, typing answers rather than flipping
+   cards, and rating your confidence before each answer is revealed.
+
+### How it avoids making things up
+
+Every claim must quote the slide it came from, and that quote is checked in
+four stages, cheapest first:
+
+| Stage | Check | Cost |
+|---|---|---|
+| Licence | May this source be used this way at all? | free |
+| Verbatim | Does the quote actually appear in the source, in order? | free |
+| Numeric | Does every dose, range and threshold asserted appear in the quote? | free |
+| Entailment | Does the quote actually *support* the claim? | one model call |
+
+The entailment audit runs in a separate, isolated session that sees only the
+claim and the quote -- never the lecture, never the original prompt -- so it
+cannot rubber-stamp its own earlier output.
+
+A card is only ever studiable when you have accepted it **and** its citation is
+verified. That rule is enforced in SQL, not left to the UI.
+
 ## Requirements
 
 - [Claude Code](https://claude.com/claude-code) installed and signed in with a

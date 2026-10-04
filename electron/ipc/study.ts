@@ -1,7 +1,6 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { join } from 'node:path';
-import { mkdir } from 'node:fs/promises';
-import { openDb, type Db } from '@core/db/index.js';
+import { ensureDb, getWorkspaceDir, getCli, getDataDir } from './context.js';
 import {
   insertLecture, listLectures, listPending, listStudiable, listCitations,
   listItemBlocks, setItemStatus, setCitationVerdict, getSourceText,
@@ -13,7 +12,6 @@ import { CHANNELS } from '@shared/ipc.js';
 import type {
   ImportResult, LectureSummary, GenSummary, TriageItem, TriageCitation, GenProgress,
 } from '@shared/ipc.js';
-import type { CliCommand } from '@shared/preflight-types.js';
 
 /**
  * Study-side IPC.
@@ -23,30 +21,10 @@ import type { CliCommand } from '@shared/preflight-types.js';
  * could ask the main process to read back.
  */
 
-let db: Db | undefined;
-let dataDir = '';
-let workspaceDir = '';
+/** Held so the UI can cancel an in-flight generation run. */
 let generationAbort: AbortController | undefined;
-let cli: CliCommand | undefined;
 
-export function setCliCommand(command: CliCommand | undefined): void {
-  cli = command;
-}
-
-async function ensureDb(): Promise<Db> {
-  if (db) return db;
-  await mkdir(dataDir, { recursive: true });
-  // Claude's only readable directory. Deliberately app-owned and empty: the
-  // generator is handed lecture text over stdin, never a path into the user's
-  // own folders.
-  workspaceDir = join(dataDir, 'workspace');
-  await mkdir(workspaceDir, { recursive: true });
-  db = openDb({ path: join(dataDir, 'nursedeck.db') });
-  return db;
-}
-
-export function registerStudyIpc(opts: { dataDir: string }): void {
-  dataDir = opts.dataDir;
+export function registerStudyIpc(): void {
 
   ipcMain.handle(CHANNELS.pickLecture, async (): Promise<string[]> => {
     const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
@@ -65,7 +43,7 @@ export function registerStudyIpc(opts: { dataDir: string }): void {
     if (typeof filePath !== 'string') throw new Error('A file path is required.');
     const database = await ensureDb();
 
-    const mediaOutDir = join(dataDir, 'media');
+    const mediaOutDir = join(getDataDir(), 'media');
     const doc = await ingestPptx(filePath, { mediaOutDir });
     insertLecture(database, doc);
 
@@ -122,11 +100,11 @@ export function registerStudyIpc(opts: { dataDir: string }): void {
 
       const report = await generateForLecture(database, doc, String(row['source_id']), {
         kinds: (Array.isArray(kinds) ? kinds : ['flashcard']) as GenerationKind[],
-        workspaceDir,
+        workspaceDir: getWorkspaceDir(),
         model: 'sonnet',
         maxBudgetUsd: 5,
         signal: generationAbort.signal,
-        ...(cli ? { cliPath: cli.path } : {}),
+        ...(getCli() ? { cliPath: getCli()!.path } : {}),
         onProgress: (p: GenProgress) => {
           if (!event.sender.isDestroyed()) event.sender.send(CHANNELS.generateProgress, p);
         },
@@ -189,7 +167,7 @@ export function registerStudyIpc(opts: { dataDir: string }): void {
       const sourceText = getSourceText(database, c.sourceId);
       const result = await verifyClaim(
         { claim: c.claim, excerpt: c.excerpt, sourceText, tier: c.licenseTier },
-        { workspaceDir, ...(cli ? { cliPath: cli.path } : {}) },
+        { workspaceDir: getWorkspaceDir(), ...(getCli() ? { cliPath: getCli()!.path } : {}) },
       );
       setCitationVerdict(
         database,

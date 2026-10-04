@@ -5,7 +5,9 @@ import { runPreflight, type PreflightReport } from '@core/preflight/checks.js';
 import { launchLogin, waitForLogin } from '@core/preflight/login.js';
 import { clearCliCache, type CliCommand } from '@core/generate/cli-locator.js';
 import { CHANNELS, type SignInProgress, type SignInOutcome } from '@shared/ipc.js';
-import { registerStudyIpc, registerStudyModeIpc, setCliCommand } from '../ipc/study.js';
+import { registerStudyIpc, registerStudyModeIpc } from '../ipc/study.js';
+import { registerExamIpc } from '../ipc/exam.js';
+import { configureIpcContext, setCliCommand } from '../ipc/context.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -164,8 +166,10 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     registerIpc();
-    registerStudyIpc({ dataDir: dataDir() });
+    configureIpcContext({ dataDir: dataDir() });
+    registerStudyIpc();
     registerStudyModeIpc();
+    registerExamIpc();
     createWindow();
 
     app.on('activate', () => {
