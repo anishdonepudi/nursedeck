@@ -7,6 +7,8 @@ import {
   type GenKind,
   type AnswerPayload,
   type ExamAnswer,
+  type NewUserCard,
+  type CardEdit,
 } from '@shared/ipc.js';
 
 /**
@@ -63,6 +65,11 @@ const bridge: NurseDeckBridge = {
   corroborate: (itemId: string) => ipcRenderer.invoke(CHANNELS.corroborate, itemId),
   exportDeck: (lectureId: string | undefined, format: 'anki-tsv' | 'quizlet-csv') =>
     ipcRenderer.invoke(CHANNELS.exportDeck, lectureId, format),
+
+  listDeck: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.listDeck, lectureId),
+  addCard: (card: NewUserCard) => ipcRenderer.invoke(CHANNELS.addCard, card),
+  editCard: (edit: CardEdit) => ipcRenderer.invoke(CHANNELS.editCard, edit),
+  deleteCard: (itemId: string) => ipcRenderer.invoke(CHANNELS.deleteCard, itemId),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),
 };
 

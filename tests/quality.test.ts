@@ -117,6 +117,8 @@ function nclex(over: Partial<GeneratedNclex> = {}): GeneratedNclex {
     itemType: 'multiple_choice',
     clientNeed: 'Physiological Adaptation',
     njcmmStep: 'Take Action',
+    keyFact:
+      'Stridor after thyroidectomy indicates airway compromise and requires immediate assessment.',
     cognitiveLevel: 'analysis',
     citation,
     options: [

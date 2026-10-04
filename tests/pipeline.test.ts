@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDb, type Db } from '@core/db/index.js';
 import { insertLecture, listPending, listStudiable, listCitations, setItemStatus } from '@core/db/repo.js';
 import { generateForLecture } from '@core/generate/pipeline.js';
-import { batchBlocks, renderBatch } from '@core/generate/prompts.js';
+import { batchBlocks, renderBatch, renderTable } from '@core/generate/prompts.js';
 import { verifyVerbatim } from '@core/validate/citation.js';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 
@@ -303,5 +303,45 @@ describe('numeric grounding scope', () => {
     );
     expect(r.ok).toBe(false);
     expect(r.unsupported.map((n) => n.value)).toContain(50);
+  });
+});
+
+describe('table rendering', () => {
+  /**
+   * Regression from a real acid-base deck: a pipe-delimited row quoted on its
+   * own ("Respiratory acidosis | down | up | Normal") cannot be audited,
+   * because nothing in it says which column is pH and which is PaCO2. The
+   * adversarial auditor rejected such citations, correctly.
+   */
+  const ABG: string[][] = [
+    ['Disorder', 'pH (7.35-7.45)', 'PaCO2 (35-45 mmHg)', 'HCO3- (22-26 mEq/L)'],
+    ['Metabolic acidosis', 'low', 'normal', 'low'],
+    ['Respiratory acidosis', 'low', 'high', 'normal'],
+  ];
+
+  it('pairs every cell with its column, so one row stands alone as evidence', () => {
+    const rendered = renderTable(ABG);
+    expect(rendered).toContain('Respiratory acidosis - pH (7.35-7.45): low');
+    expect(rendered).toContain('PaCO2 (35-45 mmHg): high');
+    // The bare pipe form is what made a quoted row unauditable.
+    expect(rendered).not.toContain('Respiratory acidosis | low | high');
+  });
+
+  it('keeps the reference ranges attached to their measurement', () => {
+    // Without this the numeric check cannot confirm a range a card quotes.
+    expect(renderTable(ABG)).toContain('7.35-7.45');
+    expect(renderTable(ABG)).toContain('22-26 mEq/L');
+  });
+
+  it('falls back gracefully for a table with no body rows', () => {
+    expect(renderTable([['Only', 'Headers']])).toContain('Only | Headers');
+    expect(renderTable([])).toBe('');
+  });
+
+  it('renders the same text the verifier checks against', () => {
+    // The generator and the verifier must agree, or a faithful quote fails.
+    const block = { id: 'b', ordinal: 1, body: '', tables: ABG };
+    const shown = renderBatch([block], 'Deck');
+    expect(shown).toContain('Respiratory acidosis - pH (7.35-7.45): low');
   });
 });

@@ -6,6 +6,7 @@ import { Triage } from './Triage.js';
 import { Study } from './Study.js';
 import { Exam } from './Exam.js';
 import { Dashboard } from './Dashboard.js';
+import { Deck } from './Deck.js';
 
 /**
  * Root.
@@ -20,7 +21,8 @@ type View =
   | { name: 'triage'; lectureId: string }
   | { name: 'study'; lectureId: string }
   | { name: 'exam'; lectureId?: string }
-  | { name: 'dashboard'; lectureId?: string };
+  | { name: 'dashboard'; lectureId?: string }
+  | { name: 'deck'; lectureId: string; title: string };
 
 export function App() {
   const [ready, setReady] = useState<PreflightReport>();
@@ -52,6 +54,7 @@ export function App() {
             onStudy={(lectureId) => setView({ name: 'study', lectureId })}
             onExam={(lectureId) => setView({ name: 'exam', lectureId })}
             onDashboard={(lectureId) => setView({ name: 'dashboard', lectureId })}
+            onCards={(lectureId, title) => setView({ name: 'deck', lectureId, title })}
           />
         )}
         {view.name === 'triage' && (
@@ -59,6 +62,13 @@ export function App() {
         )}
         {view.name === 'study' && (
           <Study lectureId={view.lectureId} onDone={() => setView({ name: 'library' })} />
+        )}
+        {view.name === 'deck' && (
+          <Deck
+            lectureId={view.lectureId}
+            lectureTitle={view.title}
+            onDone={() => setView({ name: 'library' })}
+          />
         )}
         {view.name === 'dashboard' && (
           <Dashboard

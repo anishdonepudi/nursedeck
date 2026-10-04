@@ -3,7 +3,10 @@ import type { Db } from '../db/index.js';
 import { insertItem, type NewCitation } from '../db/repo.js';
 import type { LectureDoc, LectureBlock } from '@shared/types.js';
 import { runClaude, ClaudeError } from './claude.js';
-import { batchBlocks, renderBatch, FLASHCARD_SYSTEM, CLOZE_SYSTEM, QA_SYSTEM, NCLEX_SYSTEM } from './prompts.js';
+import {
+  batchBlocks, renderBatch, renderTable,
+  FLASHCARD_SYSTEM, CLOZE_SYSTEM, QA_SYSTEM, NCLEX_SYSTEM,
+} from './prompts.js';
 import {
   FLASHCARD_SCHEMA, CLOZE_SCHEMA, QA_SCHEMA, NCLEX_SCHEMA,
   type GeneratedFlashcard, type GeneratedCloze, type GeneratedQa, type GeneratedNclex,
@@ -185,8 +188,11 @@ function toCandidates(kind: GenerationKind, data: unknown): Candidate[] {
       front: c.stem,
       back: keys.join('; '),
       citation: c.citation,
-      // The claim under test is the keyed answer, in the context of the stem.
-      claim: `${c.stem} Correct: ${keys.join('; ')}`,
+      // The claim the citation must support is the FACT that makes the key
+      // correct -- not the stem. A vignette invents its clinical scenario by
+      // design, so auditing the whole stem against a slide quote can never
+      // pass, and would reject every well-formed item.
+      claim: c.keyFact?.trim() || keys.join('; '),
       // Only the clinical answer, never the invented vignette.
       numericClaim: keys.join('; '),
       payload: { itemType: c.itemType, selectN: c.selectN, options: c.options },
@@ -204,7 +210,15 @@ function toCandidates(kind: GenerationKind, data: unknown): Candidate[] {
 
 /** The text a citation is checked against: the slide it names. */
 function blockText(b: LectureBlock): string {
-  return [b.heading, b.body, b.tables?.map((r) => r.join(' | ')).join('\n'), b.speakerNotes]
+  // Tables are rendered exactly as they were shown to the generator. If the two
+  // differed, a model quoting a table row faithfully would fail the verbatim
+  // check through no fault of its own.
+  return [
+    b.heading,
+    b.body,
+    b.tables?.length ? renderTable(b.tables) : undefined,
+    b.speakerNotes,
+  ]
     .filter(Boolean)
     .join('\n');
 }

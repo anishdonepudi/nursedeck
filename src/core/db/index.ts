@@ -48,7 +48,9 @@ export function migrate(db: Db): number {
   const applied = new Set(appliedRows.map((r) => r.id));
 
   let count = 0;
-  for (const m of MIGRATIONS) {
+  // Sorted by id rather than trusting array order: a migration appended in the
+  // wrong position would otherwise run before one it depends on.
+  for (const m of [...MIGRATIONS].sort((a, b) => a.id - b.id)) {
     if (applied.has(m.id)) continue;
     // Each migration is atomic: a failure half-way leaves no partial schema.
     db.exec('BEGIN');

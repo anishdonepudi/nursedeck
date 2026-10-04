@@ -4,6 +4,7 @@ import {
   insertSource, insertLecture, insertItem, setItemStatus, setCitationVerdict,
   listPending, listStudiable, listUnsourced, listCitations, listItemBlocks,
   searchItems, listLectures, getSourceText,
+  insertUserCard, editItem, deleteItem, listDeck,
 } from '@core/db/repo.js';
 import type { LectureDoc } from '@shared/types.js';
 
@@ -281,5 +282,114 @@ describe('transactions', () => {
     ).toThrow();
     // The item must not survive its failed citation.
     expect(db.prepare('SELECT COUNT(*) AS n FROM items').get()).toEqual({ n: 0 });
+  });
+});
+
+describe('cards the student writes herself', () => {
+  beforeEach(() => insertLecture(db, lecture));
+
+  it('is studiable immediately, with herself recorded as the source', () => {
+    const id = insertUserCard(db, {
+      lectureId: 'lec-1',
+      kind: 'flashcard',
+      front: 'What did the professor stress about potassium?',
+      back: 'Never give it IV push.',
+    });
+
+    // No triage: she wrote it, so reviewing it against itself would be theatre.
+    const studiable = listStudiable(db);
+    expect(studiable.map((s) => s.id)).toContain(id);
+
+    const [citation] = listCitations(db, id);
+    expect(citation?.verdict).toBe('verified');
+    // And it must not masquerade as lecture-backed.
+    expect(citation?.sourceTitle).toMatch(/your own notes/i);
+  });
+
+  it('marks who wrote each card, so hers are distinguishable', () => {
+    const mine = insertUserCard(db, {
+      lectureId: 'lec-1', kind: 'flashcard', front: 'Mine', back: 'A',
+    });
+    const generated = insertItem(
+      db,
+      { lectureId: 'lec-1', kind: 'flashcard', front: 'Generated', back: 'A', blockIds: ['blk-1'] },
+      [{ sourceId: sourceIdOf(), claim: 'c', excerpt: 'e', verdict: 'verified' }],
+    );
+    setItemStatus(db, generated, 'accepted');
+
+    const deck = listDeck(db, { lectureId: 'lec-1' });
+    expect(deck.find((c) => c.id === mine)?.authoredBy).toBe('user');
+    expect(deck.find((c) => c.id === generated)?.authoredBy).toBe('generated');
+  });
+
+  it('reuses one source row however many cards she writes', () => {
+    insertUserCard(db, { lectureId: 'lec-1', kind: 'flashcard', front: 'A', back: '1' });
+    insertUserCard(db, { lectureId: 'lec-1', kind: 'flashcard', front: 'B', back: '2' });
+    const n = db.prepare("SELECT COUNT(*) AS n FROM sources WHERE kind = 'user'").get() as { n: number };
+    expect(n.n).toBe(1);
+  });
+});
+
+describe('editing a card', () => {
+  beforeEach(() => insertLecture(db, lecture));
+
+  function generated(front = 'Q', back = 'A'): string {
+    const id = insertItem(
+      db,
+      { lectureId: 'lec-1', kind: 'flashcard', front, back, blockIds: ['blk-1'] },
+      [{ sourceId: sourceIdOf(), claim: back, excerpt: 'e', verdict: 'verified' }],
+    );
+    setItemStatus(db, id, 'accepted');
+    return id;
+  }
+
+  it('INVALIDATES verification when a generated card is reworded', () => {
+    const id = generated('What is normal potassium?', '3.5-5.0 mEq/L');
+    expect(listStudiable(db).map((s) => s.id)).toContain(id);
+
+    // The citation was checked against the OLD wording; the new wording may
+    // say something the source does not.
+    const result = editItem(db, { itemId: id, back: '3.5-5.3 mEq/L' });
+
+    expect(result.requiresReverification).toBe(true);
+    expect(listCitations(db, id)[0]?.verdict).toBe('unverified');
+    // And it leaves the study queue until re-checked.
+    expect(listStudiable(db).map((s) => s.id)).not.toContain(id);
+  });
+
+  it('does NOT invalidate when nothing actually changed', () => {
+    const id = generated('Q', 'A');
+    const result = editItem(db, { itemId: id, front: 'Q', back: 'A' });
+    expect(result.requiresReverification).toBe(false);
+    expect(listCitations(db, id)[0]?.verdict).toBe('verified');
+  });
+
+  it('lets her reword her OWN card without losing it from the deck', () => {
+    const id = insertUserCard(db, {
+      lectureId: 'lec-1', kind: 'flashcard', front: 'Mine', back: 'Original',
+    });
+    const result = editItem(db, { itemId: id, back: 'Reworded' });
+
+    // "Written by you" stays true however she words it.
+    expect(result.requiresReverification).toBe(false);
+    expect(listStudiable(db).map((s) => s.id)).toContain(id);
+    expect(listDeck(db)[0]?.back).toBe('Reworded');
+  });
+
+  it('records that a card was edited', () => {
+    const id = generated();
+    editItem(db, { itemId: id, front: 'Reworded question?' });
+    expect(listDeck(db).find((c) => c.id === id)?.edited).toBe(true);
+  });
+
+  it('deletes a card and its citations together', () => {
+    const id = generated();
+    deleteItem(db, id);
+    expect(listDeck(db).find((c) => c.id === id)).toBeUndefined();
+    expect(listCitations(db, id)).toHaveLength(0);
+  });
+
+  it('refuses to edit a card that no longer exists', () => {
+    expect(() => editItem(db, { itemId: 'nope', front: 'x' })).toThrow();
   });
 });

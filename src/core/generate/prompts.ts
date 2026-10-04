@@ -114,6 +114,40 @@ ${DATA_SAFETY}
 Respond with JSON only.`;
 
 /**
+ * Renders a table so that EACH ROW is self-describing.
+ *
+ * A pipe-delimited row quoted on its own is useless as evidence: an audit of
+ * "Respiratory acidosis | down | up | Normal" cannot tell which column is pH
+ * and which is PaCO2, so a citation to it proves nothing. Repeating the column
+ * name inside each cell makes any single row a complete, checkable statement —
+ * which matters because on a real acid-base deck the table IS the content.
+ */
+export function renderTable(rows: string[][]): string {
+  if (rows.length === 0) return '';
+
+  const [header, ...body] = rows;
+  if (!header || body.length === 0) {
+    return ['Table:', ...rows.map((r) => `  ${r.join(' | ')}`)].join('\n');
+  }
+
+  const lines = ['Table:'];
+  for (const row of body) {
+    // First cell is the row label; the rest are paired with their column name.
+    const label = row[0] ?? '';
+    const pairs = row
+      .slice(1)
+      .map((cell, i) => {
+        const column = header[i + 1]?.trim();
+        return column ? `${column}: ${cell}` : cell;
+      })
+      .filter((p) => p.trim().length > 0);
+
+    lines.push(pairs.length > 0 ? `  ${label} - ${pairs.join(', ')}` : `  ${label}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Renders a batch of slides for stdin.
  *
  * Slide numbers are explicit and repeated, because the model must cite them and
@@ -130,10 +164,7 @@ export function renderBatch(blocks: LectureBlock[], lectureTitle: string): strin
     parts.push(`--- SLIDE ${b.ordinal} ---`);
     if (b.heading) parts.push(`Heading: ${b.heading}`);
     if (b.body) parts.push(b.body);
-    if (b.tables?.length) {
-      parts.push('Table:');
-      for (const row of b.tables) parts.push(`  | ${row.join(' | ')} |`);
-    }
+    if (b.tables?.length) parts.push(renderTable(b.tables));
     // Speaker notes are usually the richest prose in a deck and are where the
     // "why" lives, so they are offered explicitly rather than merged into body.
     if (b.speakerNotes) parts.push(`Speaker notes: ${b.speakerNotes}`);

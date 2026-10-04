@@ -332,7 +332,20 @@ export async function ingestPptx(
     blocks.push(block);
   }
 
-  // Deck title: the core property if present, else the first slide's heading.
+  // Deck title: the core property if it says anything, else the first slide's
+  // heading, else the filename.
+  //
+  // PowerPoint leaves a placeholder in dc:title on decks exported from some
+  // tools, and real lecture decks do carry it — two of four test decks were
+  // literally titled "PowerPoint Presentation". A generic value is worse than
+  // the filename, which at least names the topic.
+  const GENERIC_TITLES = new Set([
+    'powerpoint presentation',
+    'presentation',
+    'untitled presentation',
+    'slide 1',
+  ]);
+
   let title = basename(filePath, extname(filePath));
   const coreXml = await readText('docProps/core.xml');
   if (coreXml) {
@@ -342,7 +355,7 @@ export async function ingestPptx(
     const t = typeof dcTitle === 'string' ? dcTitle : String(
       (dcTitle as Record<string, unknown> | undefined)?.['#text'] ?? '',
     );
-    if (t.trim()) title = t.trim();
+    if (t.trim() && !GENERIC_TITLES.has(t.trim().toLowerCase())) title = t.trim();
   }
   if (title === basename(filePath, extname(filePath)) && blocks[0]?.heading) {
     title = blocks[0].heading;

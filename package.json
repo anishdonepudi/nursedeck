@@ -22,7 +22,9 @@
     "test:e2e": "npm run build && vitest run tests/e2e-gate.test.ts tests/e2e-flow.test.ts",
     "demo": "tsx scripts/demo-generate.ts",
     "demo:corroborate": "tsx scripts/demo-corroborate.ts",
-    "lint:chars": "node scripts/find-bad-chars.mjs src electron tests scripts"
+    "lint:chars": "node scripts/find-bad-chars.mjs src electron tests scripts",
+    "inspect": "tsx scripts/inspect-lectures.ts",
+    "validate:real": "tsx scripts/validate-real.ts"
   },
   "devDependencies": {
     "@types/jszip": "^3.4.0",

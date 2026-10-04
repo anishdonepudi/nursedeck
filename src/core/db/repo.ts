@@ -18,7 +18,7 @@ export type CitationVerdict = 'unverified' | 'verified' | 'failed';
 
 export interface SourceRow {
   id: string;
-  kind: 'lecture' | 'textbook' | 'guideline' | 'drug_label' | 'article' | 'dataset';
+  kind: 'lecture' | 'textbook' | 'guideline' | 'drug_label' | 'article' | 'dataset' | 'user';
   licenseTier: LicenseTier;
   groupOrAuthors: string;
   year?: string;
@@ -353,5 +353,170 @@ export function listLectures(db: Db): { id: string; title: string; importedAt: s
     title: String(r['title']),
     importedAt: String(r['imported_at']),
     itemCount: Number(r['item_count']),
+  }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Cards the student writes or edits herself                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The source row representing the student herself.
+ *
+ * Her own cards still need a citation, because the FK is what makes
+ * "unsourced content cannot be studied" structurally true. The honest answer
+ * for a hand-written card is that she is the author, so it is recorded as such
+ * rather than being attached to a lecture that never said it.
+ */
+export function ensureUserSource(db: Db): string {
+  const existing = db
+    .prepare("SELECT id FROM sources WHERE kind = 'user' LIMIT 1")
+    .get() as { id: string } | undefined;
+  if (existing) return existing.id;
+
+  return insertSource(db, {
+    kind: 'user',
+    licenseTier: 'A',
+    groupOrAuthors: 'Written by you',
+    title: 'Your own notes',
+    fullText: '',
+  });
+}
+
+export interface UserCardInput {
+  lectureId: string;
+  kind: 'flashcard' | 'cloze' | 'qa';
+  front: string;
+  back: string;
+  clientNeed?: string;
+  /** Optional: the slide she was looking at when she wrote it. */
+  blockIds?: string[];
+}
+
+/**
+ * Creates a card the student wrote.
+ *
+ * It is accepted and studiable immediately: there is nothing to triage, since
+ * she is the author and reviewing her own card against itself would be theatre.
+ */
+export function insertUserCard(db: Db, input: UserCardInput): string {
+  const id = randomUUID();
+  const sourceId = ensureUserSource(db);
+
+  return transaction(db, () => {
+    db.prepare(
+      `INSERT INTO items (id, lecture_id, kind, status, front, back, client_need, authored_by)
+       VALUES (?, ?, ?, 'accepted', ?, ?, ?, 'user')`,
+    ).run(id, input.lectureId, input.kind, input.front, input.back, input.clientNeed ?? null);
+
+    const link = db.prepare('INSERT OR IGNORE INTO item_blocks (item_id, block_id) VALUES (?, ?)');
+    for (const b of input.blockIds ?? []) link.run(id, b);
+
+    db.prepare(
+      `INSERT INTO citations (id, item_id, source_id, claim, excerpt, verdict, checked_at)
+       VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))`,
+    ).run(randomUUID(), id, sourceId, input.back, 'Written by you.');
+
+    return id;
+  });
+}
+
+export interface EditCardInput {
+  itemId: string;
+  front?: string;
+  back?: string;
+  clientNeed?: string;
+}
+
+/**
+ * Edits a card's wording.
+ *
+ * Editing a GENERATED card invalidates its verification: the citation was
+ * checked against the original wording, and the new wording may say something
+ * the source does not. Rather than silently keeping a stale verdict, the
+ * citation is reset to unverified so she can re-check it — and the card drops
+ * out of the study queue until she does.
+ */
+export function editItem(db: Db, input: EditCardInput): { requiresReverification: boolean } {
+  return transaction(db, () => {
+    const row = db
+      .prepare('SELECT authored_by, front, back FROM items WHERE id = ?')
+      .get(input.itemId) as { authored_by: string; front: string; back: string } | undefined;
+    if (!row) throw new Error('That card no longer exists.');
+
+    const front = input.front ?? row.front;
+    const back = input.back ?? row.back;
+    const contentChanged = front !== row.front || back !== row.back;
+
+    db.prepare(
+      `UPDATE items
+          SET front = ?, back = ?, client_need = COALESCE(?, client_need),
+              edited_at = datetime('now')
+        WHERE id = ?`,
+    ).run(front, back, input.clientNeed ?? null, input.itemId);
+
+    const isUserCard = row.authored_by === 'user';
+    if (!contentChanged || isUserCard) {
+      // Her own card's citation is "written by you", which stays true however
+      // she rewords it.
+      if (isUserCard && contentChanged) {
+        db.prepare('UPDATE citations SET claim = ? WHERE item_id = ?').run(back, input.itemId);
+      }
+      return { requiresReverification: false };
+    }
+
+    db.prepare(
+      `UPDATE citations
+          SET verdict = 'unverified', claim = ?, failure_stage = NULL, failure_detail = NULL
+        WHERE item_id = ?`,
+    ).run(back, input.itemId);
+
+    return { requiresReverification: true };
+  });
+}
+
+export function deleteItem(db: Db, itemId: string): void {
+  db.prepare('DELETE FROM items WHERE id = ?').run(itemId);
+}
+
+export interface DeckCard {
+  id: string;
+  kind: ItemKind;
+  front: string;
+  back: string;
+  status: ItemStatus;
+  authoredBy: 'generated' | 'user';
+  edited: boolean;
+  verified: boolean;
+  lectureTitle: string;
+}
+
+/** Every card in a deck, for browsing and editing. */
+export function listDeck(db: Db, opts: { lectureId?: string; limit?: number } = {}): DeckCard[] {
+  const rows = db
+    .prepare(
+      `SELECT i.id, i.kind, i.front, i.back, i.status, i.authored_by, i.edited_at,
+              l.title AS lecture_title,
+              (SELECT COUNT(*) FROM citations c
+                WHERE c.item_id = i.id AND c.verdict = 'verified') AS verified
+         FROM items i
+         JOIN lectures l ON l.id = i.lecture_id
+        WHERE i.status IN ('accepted','pending')
+          ${opts.lectureId ? 'AND i.lecture_id = ?' : ''}
+        ORDER BY i.created_at DESC
+        LIMIT ?`,
+    )
+    .all(...(opts.lectureId ? [opts.lectureId] : []), opts.limit ?? 500) as Record<string, unknown>[];
+
+  return rows.map((r) => ({
+    id: String(r['id']),
+    kind: r['kind'] as ItemKind,
+    front: String(r['front']),
+    back: String(r['back']),
+    status: r['status'] as ItemStatus,
+    authoredBy: r['authored_by'] === 'user' ? 'user' : 'generated',
+    edited: r['edited_at'] !== null && r['edited_at'] !== undefined,
+    verified: Number(r['verified']) > 0,
+    lectureTitle: String(r['lecture_title']),
   }));
 }

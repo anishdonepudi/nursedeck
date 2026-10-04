@@ -25,9 +25,10 @@ interface Props {
   onStudy: (lectureId: string) => void;
   onExam: (lectureId: string) => void;
   onDashboard: (lectureId: string) => void;
+  onCards: (lectureId: string, title: string) => void;
 }
 
-export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDashboard }: Props) {
+export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDashboard, onCards }: Props) {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const selected = selectedId;
   const setSelected = onSelect;
@@ -161,6 +162,12 @@ export function Library({ selectedId, onSelect, onReview, onStudy, onExam, onDas
             {busy === 'generating' && (
               <button type="button" className="ghost" onClick={() => void window.nursedeck.cancelGeneration()}>
                 Cancel
+              </button>
+            )}
+
+            {!busy && (
+              <button type="button" className="ghost" onClick={() => onCards(current.id, current.title)}>
+                Cards
               </button>
             )}
 

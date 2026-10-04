@@ -280,4 +280,48 @@ END;
 ALTER TABLE card_states ADD COLUMN learning_steps INTEGER NOT NULL DEFAULT 0;
 `,
   },
+  {
+    id: 3,
+    name: 'user_authored_cards',
+    sql: `
+-- Cards the student writes herself.
+--
+-- These still need a source row, because every item carries a citation FK and
+-- that invariant is what makes "unsourced content cannot be studied" true. The
+-- honest answer is that SHE is the source: the card is marked 'user' so the UI
+-- can say "your own card" rather than implying a lecture backed it, and so a
+-- hand-written card is never mistaken for a verified generated one.
+--
+-- SQLite cannot alter a CHECK constraint, so the sources table is rebuilt.
+CREATE TABLE sources_new (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL CHECK (kind IN
+                   ('lecture','textbook','guideline','drug_label','article','dataset','user')),
+  license_tier   TEXT NOT NULL CHECK (license_tier IN ('A','B','C','D')),
+  group_or_authors TEXT NOT NULL,
+  year           TEXT,
+  title          TEXT NOT NULL,
+  container      TEXT,
+  edition        TEXT,
+  doi_or_url     TEXT,
+  license_url    TEXT,
+  retrieved_at   TEXT,
+  full_text      TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO sources_new SELECT * FROM sources;
+DROP TABLE sources;
+ALTER TABLE sources_new RENAME TO sources;
+CREATE INDEX idx_sources_tier ON sources (license_tier);
+
+-- Distinguishes a card she wrote from one the model produced. Generated cards
+-- must pass verification; hers are hers.
+ALTER TABLE items ADD COLUMN authored_by TEXT NOT NULL DEFAULT 'generated'
+  CHECK (authored_by IN ('generated','user'));
+
+-- Records that an item was edited, so a card she reworded is not silently
+-- presented as the model's original wording.
+ALTER TABLE items ADD COLUMN edited_at TEXT;
+`,
+  },
 ];

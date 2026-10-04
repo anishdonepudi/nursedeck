@@ -170,13 +170,18 @@ export const NCLEX_SCHEMA = {
             },
             minItems: 4,
           },
+          keyFact: {
+            type: 'string',
+            description:
+              'The single factual statement FROM THE SLIDE that makes the keyed answer correct. This is what gets checked against your citation, so it must be a claim the slide actually makes -- not the vignette, which you invented.',
+          },
           clientNeed: { type: 'string', enum: CLIENT_NEEDS as unknown as string[] },
           njcmmStep: { type: 'string', enum: NJCMM_STEPS as unknown as string[] },
           cognitiveLevel: { type: 'string', enum: ['application', 'analysis'] },
           citation: CITATION,
           topic: { type: 'string' },
         },
-        required: ['stem', 'itemType', 'options', 'clientNeed', 'njcmmStep', 'citation'],
+        required: ['stem', 'itemType', 'options', 'keyFact', 'clientNeed', 'njcmmStep', 'citation'],
         additionalProperties: false,
       },
     },
@@ -224,6 +229,8 @@ export interface GeneratedNclexOption {
 
 export interface GeneratedNclex {
   stem: string;
+  /** The slide fact that justifies the key; what the citation is checked against. */
+  keyFact: string;
   itemType: 'multiple_choice' | 'select_all' | 'select_n';
   selectN?: number;
   options: GeneratedNclexOption[];

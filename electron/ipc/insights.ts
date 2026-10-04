@@ -115,3 +115,49 @@ export function registerInsightsIpc(): void {
     },
   );
 }
+
+/* --------------------------- her own cards -------------------------------- */
+
+import { insertUserCard, editItem, deleteItem, listDeck } from '@core/db/repo.js';
+import type { DeckCardRow, NewUserCard, CardEdit } from '@shared/ipc.js';
+
+export function registerDeckIpc(): void {
+  ipcMain.handle(CHANNELS.listDeck, async (_e, lectureId: unknown): Promise<DeckCardRow[]> => {
+    const db = await ensureDb();
+    return listDeck(db, typeof lectureId === 'string' ? { lectureId } : {}) as DeckCardRow[];
+  });
+
+  ipcMain.handle(CHANNELS.addCard, async (_e, card: unknown): Promise<string> => {
+    const c = card as NewUserCard;
+    if (!c || typeof c.lectureId !== 'string') throw new Error('A lecture is required.');
+    if (!c.front?.trim() || !c.back?.trim()) {
+      throw new Error('A card needs both a question and an answer.');
+    }
+    const db = await ensureDb();
+    return insertUserCard(db, {
+      lectureId: c.lectureId,
+      kind: c.kind === 'cloze' || c.kind === 'qa' ? c.kind : 'flashcard',
+      front: c.front.trim(),
+      back: c.back.trim(),
+      ...(c.clientNeed ? { clientNeed: c.clientNeed } : {}),
+    });
+  });
+
+  ipcMain.handle(CHANNELS.editCard, async (_e, edit: unknown) => {
+    const e2 = edit as CardEdit;
+    if (!e2 || typeof e2.itemId !== 'string') throw new Error('A card id is required.');
+    const db = await ensureDb();
+    return editItem(db, {
+      itemId: e2.itemId,
+      ...(e2.front !== undefined ? { front: e2.front.trim() } : {}),
+      ...(e2.back !== undefined ? { back: e2.back.trim() } : {}),
+      ...(e2.clientNeed ? { clientNeed: e2.clientNeed } : {}),
+    });
+  });
+
+  ipcMain.handle(CHANNELS.deleteCard, async (_e, itemId: unknown): Promise<void> => {
+    if (typeof itemId !== 'string') throw new Error('A card id is required.');
+    const db = await ensureDb();
+    deleteItem(db, itemId);
+  });
+}

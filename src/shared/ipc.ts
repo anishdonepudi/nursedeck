@@ -32,6 +32,10 @@ export const CHANNELS = {
   dashboard: 'stats:dashboard',
   corroborate: 'sources:corroborate',
   exportDeck: 'deck:export',
+  listDeck: 'deck:list',
+  addCard: 'deck:add',
+  editCard: 'deck:edit',
+  deleteCard: 'deck:delete',
 } as const;
 
 export type SignInProgress =
@@ -83,6 +87,10 @@ export interface NurseDeckBridge {
   dashboard(lectureId?: string, examDate?: string): Promise<Dashboard>;
   corroborate(itemId: string): Promise<CorroborationReport>;
   exportDeck(lectureId: string | undefined, format: 'anki-tsv' | 'quizlet-csv'): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
+  listDeck(lectureId?: string): Promise<DeckCardRow[]>;
+  addCard(card: NewUserCard): Promise<string>;
+  editCard(edit: CardEdit): Promise<{ requiresReverification: boolean }>;
+  deleteCard(itemId: string): Promise<void>;
 }
 
 export type { PreflightReport, AuthStatus };
@@ -304,4 +312,33 @@ export interface CorroborationReport {
   sourceUrl?: string;
   excerpt?: string;
   detail?: string;
+}
+
+/* --------------------------- her own cards -------------------------------- */
+
+export interface DeckCardRow {
+  id: string;
+  kind: GenKind;
+  front: string;
+  back: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'quarantined';
+  authoredBy: 'generated' | 'user';
+  edited: boolean;
+  verified: boolean;
+  lectureTitle: string;
+}
+
+export interface NewUserCard {
+  lectureId: string;
+  kind: 'flashcard' | 'cloze' | 'qa';
+  front: string;
+  back: string;
+  clientNeed?: string;
+}
+
+export interface CardEdit {
+  itemId: string;
+  front?: string;
+  back?: string;
+  clientNeed?: string;
 }

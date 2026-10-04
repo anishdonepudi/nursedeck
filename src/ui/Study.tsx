@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StudyCard, StudyStats } from '@shared/ipc.js';
+import { useSpeech } from './useSpeech.js';
 
 /**
  * The review screen.
@@ -70,6 +71,7 @@ export function Study({ lectureId, onDone }: Props) {
   const [typed, setTyped] = useState('');
   const [wasCorrect, setWasCorrect] = useState<boolean>();
   const [error, setError] = useState<string>();
+  const speech = useSpeech();
   const startedAt = useRef(Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -101,13 +103,18 @@ export function Study({ lectureId, onDone }: Props) {
     setWasCorrect(undefined);
     startedAt.current = Date.now();
     inputRef.current?.focus();
+    // Reading the question aloud is the point of the feature: it lets her
+    // answer out loud rather than silently recognising.
+    if (speech.enabled && current) speech.speak(current.prompt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   const reveal = useCallback(() => {
     if (!current || revealed) return;
     setWasCorrect(answerMatches(typed, current.expectedAnswer));
     setRevealed(true);
-  }, [current, revealed, typed]);
+    if (speech.enabled) speech.speak(current.expectedAnswer);
+  }, [current, revealed, typed, speech]);
 
   const answer = useCallback(
     async (rating: number) => {
@@ -132,6 +139,11 @@ export function Study({ lectureId, onDone }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onDone(); return; }
+      if (e.key.toLowerCase() === 'r' && (e.target as HTMLElement)?.tagName !== 'INPUT') {
+        e.preventDefault();
+        speech.speak(revealed ? current?.expectedAnswer ?? '' : current?.prompt ?? '');
+        return;
+      }
       if (!revealed) {
         if (e.key === 'Enter') { e.preventDefault(); reveal(); }
         return;
@@ -143,7 +155,7 @@ export function Study({ lectureId, onDone }: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [revealed, reveal, answer, onDone]);
+  }, [revealed, reveal, answer, onDone, speech, current]);
 
   if (loading) {
     return <div className="study"><p className="waiting"><span className="spinner" /> Loading...</p></div>;
@@ -191,6 +203,27 @@ export function Study({ lectureId, onDone }: Props) {
         <span>{index + 1} of {queue.length}</span>
         {current.isNew && <span className="pill">new</span>}
         <span className="study-kind">{current.kind}</span>
+
+        {speech.supported && (
+          <span className="speech-controls">
+            <button
+              type="button"
+              className={`chip ${speech.enabled ? 'chip-on' : ''}`}
+              onClick={() => speech.setEnabled(!speech.enabled)}
+              title="Read cards aloud"
+            >
+              {speech.enabled ? 'Read aloud on' : 'Read aloud off'}
+            </button>
+            <button
+              type="button"
+              className="chip"
+              onClick={() => speech.speak(revealed ? current.expectedAnswer : current.prompt)}
+              title="Replay (R)"
+            >
+              {speech.speaking ? 'Speaking' : 'Replay'}
+            </button>
+          </span>
+        )}
       </header>
 
       <article className="study-card">
