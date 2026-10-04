@@ -324,4 +324,57 @@ ALTER TABLE items ADD COLUMN authored_by TEXT NOT NULL DEFAULT 'generated'
 ALTER TABLE items ADD COLUMN edited_at TEXT;
 `,
   },
+  {
+    id: 4,
+    name: 'imported_decks',
+    sql: `
+-- Importing a classmate's deck.
+--
+-- An imported card has no evidence behind it. The file it came from proves
+-- only that the card was copied faithfully, not that it is true, and a shared
+-- Quizlet set is exactly the unreliable source this tool exists to replace.
+--
+-- So imports land as 'pending' with an UNVERIFIED citation and cannot be
+-- studied. The citation's excerpt is the card's own imported text and the
+-- source holds the raw file, which means the verbatim check still means
+-- something real: it proves the import did not mangle the card. Turning it
+-- into something studiable requires her to vouch for it in triage, which
+-- records HER as the party standing behind the claim -- the same honest
+-- position as a card she wrote herself.
+--
+-- SQLite cannot alter a CHECK constraint, so sources is rebuilt again.
+CREATE TABLE sources_new (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL CHECK (kind IN
+                   ('lecture','textbook','guideline','drug_label','article','dataset','user','import')),
+  license_tier   TEXT NOT NULL CHECK (license_tier IN ('A','B','C','D')),
+  group_or_authors TEXT NOT NULL,
+  year           TEXT,
+  title          TEXT NOT NULL,
+  container      TEXT,
+  edition        TEXT,
+  doi_or_url     TEXT,
+  license_url    TEXT,
+  retrieved_at   TEXT,
+  full_text      TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+INSERT INTO sources_new SELECT * FROM sources;
+DROP TABLE sources;
+ALTER TABLE sources_new RENAME TO sources;
+CREATE INDEX idx_sources_tier ON sources (license_tier);
+
+-- Where an imported card came from, so the UI can name the file and never show
+-- a classmate's card as though a lecture backed it.
+--
+-- Deliberately a new nullable column rather than a third value in the
+-- authored_by CHECK: changing that constraint means rebuilding the items table, and six
+-- tables hold foreign keys into it. SQLite rewrites a child table's FK clause
+-- when the parent is renamed, so the 12-step rebuild would silently leave
+-- citations, card_states and reviews pointing at the dropped items_old. An
+-- additive column cannot do that.
+ALTER TABLE items ADD COLUMN imported_from TEXT;
+CREATE INDEX idx_items_imported ON items (imported_from);
+`,
+  },
 ];

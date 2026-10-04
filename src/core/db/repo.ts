@@ -18,7 +18,7 @@ export type CitationVerdict = 'unverified' | 'verified' | 'failed';
 
 export interface SourceRow {
   id: string;
-  kind: 'lecture' | 'textbook' | 'guideline' | 'drug_label' | 'article' | 'dataset' | 'user';
+  kind: 'lecture' | 'textbook' | 'guideline' | 'drug_label' | 'article' | 'dataset' | 'user' | 'import';
   licenseTier: LicenseTier;
   groupOrAuthors: string;
   year?: string;
@@ -485,7 +485,9 @@ export interface DeckCard {
   front: string;
   back: string;
   status: ItemStatus;
-  authoredBy: 'generated' | 'user';
+  authoredBy: 'generated' | 'user' | 'imported';
+  /** The file an imported card came from, so its provenance is visible. */
+  importedFrom?: string;
   edited: boolean;
   verified: boolean;
   lectureTitle: string;
@@ -496,6 +498,7 @@ export function listDeck(db: Db, opts: { lectureId?: string; limit?: number } = 
   const rows = db
     .prepare(
       `SELECT i.id, i.kind, i.front, i.back, i.status, i.authored_by, i.edited_at,
+              i.imported_from,
               l.title AS lecture_title,
               (SELECT COUNT(*) FROM citations c
                 WHERE c.item_id = i.id AND c.verdict = 'verified') AS verified
@@ -514,9 +517,123 @@ export function listDeck(db: Db, opts: { lectureId?: string; limit?: number } = 
     front: String(r['front']),
     back: String(r['back']),
     status: r['status'] as ItemStatus,
-    authoredBy: r['authored_by'] === 'user' ? 'user' : 'generated',
+    authoredBy:
+      r['imported_from'] != null ? 'imported' : r['authored_by'] === 'user' ? 'user' : 'generated',
+    ...(r['imported_from'] != null ? { importedFrom: String(r['imported_from']) } : {}),
     edited: r['edited_at'] !== null && r['edited_at'] !== undefined,
     verified: Number(r['verified']) > 0,
     lectureTitle: String(r['lecture_title']),
   }));
+}
+
+/* ------------------------------ imported decks ------------------------------ */
+
+export interface ImportDeckInput {
+  /** Lecture the imported cards are filed under. */
+  lectureId: string;
+  /** File the deck came from, shown to her verbatim. */
+  filename: string;
+  /** Raw file text, stored so an imported card's quote remains checkable. */
+  rawText: string;
+  cards: { front: string; back: string; tags?: string[] }[];
+}
+
+export interface ImportDeckResult {
+  sourceId: string;
+  imported: number;
+  /** Cards already present with the same wording. */
+  duplicates: number;
+}
+
+/**
+ * Stores cards from someone else's deck.
+ *
+ * They land PENDING and UNVERIFIED, so nothing imported can be studied until
+ * she has looked at it. The citation records the card's own text against the
+ * raw file, which proves the import is faithful -- not that the card is true.
+ * Only `vouchItem` can promote one, and only she can trigger that.
+ */
+export function insertImportedDeck(db: Db, input: ImportDeckInput): ImportDeckResult {
+  return transaction(db, () => {
+    const sourceId = insertSource(db, {
+      kind: 'import',
+      // Tier A covers only our handling of it: the text is hers to keep on her
+      // own machine. It says nothing about whether the content is correct.
+      licenseTier: 'A',
+      groupOrAuthors: 'Imported deck',
+      title: input.filename,
+      fullText: input.rawText,
+    });
+
+    const existing = new Set(
+      (
+        db
+          .prepare('SELECT front, back FROM items WHERE lecture_id = ?')
+          .all(input.lectureId) as { front: string; back: string }[]
+      ).map((r) => `${r.front.toLowerCase().trim()}|${r.back.toLowerCase().trim()}`),
+    );
+
+    const insertRow = db.prepare(
+      `INSERT INTO items (id, lecture_id, kind, status, front, back, authored_by, imported_from)
+       VALUES (?, ?, 'flashcard', 'pending', ?, ?, 'generated', ?)`,
+    );
+    const insertCite = db.prepare(
+      `INSERT INTO citations (id, item_id, source_id, claim, excerpt, verdict)
+       VALUES (?, ?, ?, ?, ?, 'unverified')`,
+    );
+
+    let imported = 0;
+    let duplicates = 0;
+
+    for (const card of input.cards) {
+      const key = `${card.front.toLowerCase().trim()}|${card.back.toLowerCase().trim()}`;
+      if (existing.has(key)) {
+        duplicates++;
+        continue;
+      }
+      existing.add(key);
+
+      const id = randomUUID();
+      insertRow.run(id, input.lectureId, card.front, card.back, input.filename);
+      insertCite.run(randomUUID(), id, sourceId, `${card.front} ${card.back}`, card.back);
+      imported++;
+    }
+
+    return { sourceId, imported, duplicates };
+  });
+}
+
+/**
+ * Records that she personally stands behind an imported card.
+ *
+ * This is the only way an imported card becomes studiable, and it is a
+ * deliberate transfer of responsibility rather than a verification: no evidence
+ * has been produced, she has simply decided the card is right. The citation
+ * says exactly that, so a card promoted this way can never be mistaken later
+ * for one a lecture backed.
+ */
+export function vouchItem(db: Db, itemId: string): void {
+  const row = db
+    .prepare('SELECT imported_from FROM items WHERE id = ?')
+    .get(itemId) as { imported_from: string | null } | undefined;
+  if (!row) throw new Error('That card does not exist.');
+  if (!row.imported_from) {
+    // Generated cards must pass the gate, not be waved through it.
+    throw new Error('Only an imported card can be vouched for.');
+  }
+
+  transaction(db, () => {
+    const sourceId = ensureUserSource(db);
+    db.prepare("UPDATE items SET status = 'accepted' WHERE id = ?").run(itemId);
+    db.prepare(
+      `INSERT INTO citations (id, item_id, source_id, claim, excerpt, verdict, checked_at)
+       VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))`,
+    ).run(
+      randomUUID(),
+      itemId,
+      sourceId,
+      (db.prepare('SELECT back FROM items WHERE id = ?').get(itemId) as { back: string }).back,
+      'Checked and kept by you, from an imported deck.',
+    );
+  });
 }
