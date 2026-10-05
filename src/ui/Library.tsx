@@ -29,11 +29,13 @@ interface Props {
   onStudyAll: () => void;
   onExam: (lectureId: string) => void;
   onDashboard: (lectureId: string) => void;
+  /** Opens the concept map, built from verified cards only. */
+  onMap: (lectureId: string) => void;
   onCards: (lectureId: string, title: string) => void;
 }
 
 export function Library({
-  selectedId, onSelect, onReview, onStudy, onStudyAll, onExam, onDashboard, onCards,
+  selectedId, onSelect, onReview, onStudy, onStudyAll, onExam, onDashboard, onMap, onCards,
 }: Props) {
   const [lectures, setLectures] = useState<LectureSummary[]>([]);
   const selected = selectedId;
@@ -223,6 +225,9 @@ export function Library({
                 </button>
                 <button type="button" className="ghost" onClick={() => onDashboard(current.id)}>
                   Progress
+                </button>
+                <button type="button" className="ghost" onClick={() => onMap(current.id)}>
+                  Concept map
                 </button>
               </>
             )}

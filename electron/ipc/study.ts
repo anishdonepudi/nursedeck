@@ -228,6 +228,15 @@ export function registerStudyIpc(): void {
         { claim: c.claim, excerpt: c.excerpt, sourceText, tier: c.licenseTier },
         { workspaceDir: getWorkspaceDir(), ...(getCli() ? { cliPath: getCli()!.path } : {}) },
       );
+      // A widened citation has to be WRITTEN BACK. The audit that passed was
+      // run against the wider quote, so storing the original would show her a
+      // quote that was never the one verified.
+      if (result.ok && result.repairedExcerpt) {
+        database
+          .prepare('UPDATE citations SET excerpt = ? WHERE id = ?')
+          .run(result.repairedExcerpt, c.id);
+      }
+
       setCitationVerdict(
         database,
         c.id,

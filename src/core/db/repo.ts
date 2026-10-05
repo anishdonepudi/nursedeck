@@ -217,7 +217,8 @@ function mapItemRow(r: Record<string, unknown>): ItemRow {
 const ITEM_WITH_CITATION_COUNTS = `
   SELECT i.rowid AS rowid, i.*,
          (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id AND c.verdict = 'verified') AS verified_citations,
-         (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id AND c.verdict = 'failed')   AS failed_citations
+         (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id AND c.verdict = 'failed')   AS failed_citations,
+         (SELECT COUNT(*) FROM citations c WHERE c.item_id = i.id)                            AS total_citations
     FROM items i
 `;
 
@@ -255,19 +256,48 @@ export function listStudiable(db: Db, opts: { lectureId?: string; limit?: number
 }
 
 /**
- * Accepted items that have NO verified citation.
+ * Accepted items that can never become studiable as they stand: either no
+ * citation row at all, or every citation already checked and FAILED.
  *
- * This should always be empty. It exists so the condition is queryable: an
- * unsourced claim reaching the deck becomes a detectable bug with a list
- * attached, rather than something a user has to notice while revising.
+ * Both need a human. An orphan is a genuine bug, since insertItem writes an
+ * item and its citations in one transaction. An all-failed card is a claim her
+ * own lecture does not support, which she accepted in triage before the audit
+ * caught up.
+ *
+ * What this deliberately no longer matches is a card merely AWAITING its audit.
+ * That is an ordinary state -- she keeps a card, verification runs separately --
+ * and counting it here meant the "this should never happen" alarm was lit
+ * during normal use. An alarm that is always on is one nobody reads.
  */
 export function listUnsourced(db: Db): ItemRow[] {
   const rows = db
     .prepare(
       `SELECT * FROM (${ITEM_WITH_CITATION_COUNTS}) AS i
-        WHERE i.status = 'accepted' AND verified_citations = 0`,
+        WHERE i.status = 'accepted'
+          AND verified_citations = 0
+          AND (total_citations = 0 OR failed_citations = total_citations)`,
     )
     .all() as Record<string, unknown>[];
+  return rows.map(mapItemRow);
+}
+
+/**
+ * Accepted items whose citations exist but none has been verified yet.
+ *
+ * Normal and expected, not a fault: these are cards she kept in triage that
+ * have not been through the audit. They are not studiable, so this is the list
+ * behind "N cards still need checking".
+ */
+export function listAwaitingVerification(db: Db, opts: { lectureId?: string } = {}): ItemRow[] {
+  const rows = db
+    .prepare(
+      `SELECT * FROM (${ITEM_WITH_CITATION_COUNTS}) AS i
+        WHERE i.status = 'accepted'
+          AND verified_citations = 0
+          AND total_citations > failed_citations
+          ${opts.lectureId ? 'AND i.lecture_id = ?' : ''}`,
+    )
+    .all(...(opts.lectureId ? [opts.lectureId] : [])) as Record<string, unknown>[];
   return rows.map(mapItemRow);
 }
 

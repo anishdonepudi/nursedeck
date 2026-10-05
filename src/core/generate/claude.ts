@@ -186,12 +186,30 @@ export async function runClaude<T>(prompt: string, opts: ClaudeOptions): Promise
     cliPath = located.path;
   }
 
-  const { code, stdout, stderr, spawnError } = await runProcess(cliPath, args, {
+  let { code, stdout, stderr, spawnError } = await runProcess(cliPath, args, {
     cwd: opts.workspaceDir,
     timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     signal: opts.signal,
     input: opts.input,
   });
+
+  // The CLI updates itself in place. A run that happens to spawn during that
+  // swap gets ENOENT against a path that exists moments before and after, and
+  // a single such failure was enough to kill a twenty-minute generation.
+  // Observed in practice, not hypothetically: a measurement run died mid-deck
+  // and the binary's timestamp showed it had been replaced at that second.
+  //
+  // Retried once, briefly, and only for a failure to LAUNCH. A CLI that starts
+  // and then errors is reporting something real and is never retried here.
+  if (spawnError && !opts.signal?.aborted) {
+    await new Promise((r) => setTimeout(r, 1500));
+    ({ code, stdout, stderr, spawnError } = await runProcess(cliPath, args, {
+      cwd: opts.workspaceDir,
+      timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      signal: opts.signal,
+      input: opts.input,
+    }));
+  }
 
   if (opts.signal?.aborted) {
     throw new ClaudeError('Generation was cancelled.', { kind: 'aborted', exitCode: code });

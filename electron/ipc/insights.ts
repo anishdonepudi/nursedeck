@@ -257,3 +257,34 @@ export function registerImportIpc(): void {
     vouchItem(db, itemId);
   });
 }
+
+/* ----------------------------- concept map -------------------------------- */
+
+import { buildConceptMap } from '@core/study/conceptmap.js';
+import type { ConceptMapData } from '@shared/ipc.js';
+
+export function registerConceptMapIpc(): void {
+  ipcMain.handle(CHANNELS.conceptMap, async (_e, lectureId: unknown): Promise<ConceptMapData> => {
+    const db = await ensureDb();
+    const map = await buildConceptMap(db, {
+      ...(typeof lectureId === 'string' ? { lectureId } : {}),
+      workspaceDir: getWorkspaceDir(),
+      model: 'sonnet',
+      maxBudgetUsd: 2,
+      ...(getCli() ? { cliPath: getCli()!.path } : {}),
+    });
+
+    return {
+      nodes: map.nodes,
+      edges: map.edges.map((e) => ({
+        from: e.from,
+        relation: e.relation,
+        to: e.to,
+        itemId: e.itemId,
+        cardFront: e.cardFront,
+        ...(e.excerpt ? { excerpt: e.excerpt } : {}),
+      })),
+      skipped: map.skipped,
+    };
+  });
+}

@@ -552,3 +552,16 @@ kbd {
 .kp-evidence, .kp-note { font-size: 0.86em; opacity: 0.8; font-style: italic; }
 .teachback-feedback { margin: 0; }
 .import-progress { margin: 4px 0 10px; }
+
+/* Concept map: a view over verified cards, so every arrow is clickable. */
+.map-svg { width: 100%; height: auto; display: block; }
+.map-edge line { stroke: var(--line); stroke-width: 1.5; }
+.map-edge text { fill: var(--muted); font-size: 11px; pointer-events: none; }
+.map-edge { cursor: pointer; }
+.map-edge:hover line, .map-edge-on line { stroke: var(--accent); stroke-width: 2.5; }
+.map-edge:hover text, .map-edge-on text { fill: var(--text); }
+.map-arrow-head { fill: var(--line); }
+.map-node { cursor: pointer; }
+.map-node circle { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
+.map-node:hover circle, .map-node-on circle { stroke: var(--accent); }
+.map-node text { fill: var(--text); font-size: 12px; pointer-events: none; }

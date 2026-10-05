@@ -4,6 +4,7 @@ import { SetupGate } from './SetupGate.js';
 import { Library } from './Library.js';
 import { Triage } from './Triage.js';
 import { Study } from './Study.js';
+import { ConceptMap } from './ConceptMap.js';
 import { Exam } from './Exam.js';
 import { Dashboard } from './Dashboard.js';
 import { Deck } from './Deck.js';
@@ -22,6 +23,7 @@ type View =
   | { name: 'study'; lectureId?: string }
   | { name: 'exam'; lectureId?: string }
   | { name: 'dashboard'; lectureId?: string }
+  | { name: 'map'; lectureId?: string }
   | { name: 'deck'; lectureId: string; title: string };
 
 export function App() {
@@ -55,6 +57,7 @@ export function App() {
             onStudyAll={() => setView({ name: 'study' })}
             onExam={(lectureId) => setView({ name: 'exam', lectureId })}
             onDashboard={(lectureId) => setView({ name: 'dashboard', lectureId })}
+            onMap={(lectureId) => setView({ name: 'map', lectureId })}
             onCards={(lectureId, title) => setView({ name: 'deck', lectureId, title })}
           />
         )}
@@ -63,6 +66,12 @@ export function App() {
         )}
         {view.name === 'study' && (
           <Study
+            {...(view.lectureId ? { lectureId: view.lectureId } : {})}
+            onDone={() => setView({ name: 'library' })}
+          />
+        )}
+        {view.name === 'map' && (
+          <ConceptMap
             {...(view.lectureId ? { lectureId: view.lectureId } : {})}
             onDone={() => setView({ name: 'library' })}
           />

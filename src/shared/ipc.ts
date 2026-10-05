@@ -38,6 +38,7 @@ export const CHANNELS = {
   editCard: 'deck:edit',
   deleteCard: 'deck:delete',
   gradeAnswer: 'study:grade',
+  conceptMap: 'study:concept-map',
   importDeck: 'deck:import',
   vouchCard: 'deck:vouch',
 } as const;
@@ -96,6 +97,8 @@ export interface NurseDeckBridge {
     lectureId: string | undefined,
     format: 'anki-tsv' | 'quizlet-csv' | 'apkg',
   ): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
+  /** Builds a concept map from verified cards only. */
+  conceptMap(lectureId?: string): Promise<ConceptMapData>;
   /** Marks a typed explanation against a Q&A item's key points. */
   gradeAnswer(itemId: string, answer: string): Promise<TeachBackGrade>;
   /** Imports a deck somebody else made. Cards land unverified and unstudiable. */
@@ -350,6 +353,22 @@ export interface DeckCardRow {
   edited: boolean;
   verified: boolean;
   lectureTitle: string;
+}
+
+export interface ConceptEdgeRow {
+  from: string;
+  relation: string;
+  to: string;
+  itemId: string;
+  cardFront: string;
+  /** The verified card's quote, so an arrow is checkable like a card. */
+  excerpt?: string;
+}
+
+export interface ConceptMapData {
+  nodes: { label: string; degree: number }[];
+  edges: ConceptEdgeRow[];
+  skipped: number;
 }
 
 export interface KeyPointResult {

@@ -1,4 +1,5 @@
 import { runClaude } from '../generate/claude.js';
+import { repairCitation } from './repair.js';
 
 /**
  * Stage two of citation verification: does the (genuine) cited passage actually
@@ -65,6 +66,12 @@ export interface EntailmentOptions {
   model?: string;
   signal?: AbortSignal;
   cliPath?: string;
+  /**
+   * Set false to audit the citation exactly as written, with no widening.
+   * Used by the validation scripts so the measured yield is the raw one.
+   */
+  allowRepair?: boolean;
+  maxBudgetUsd?: number;
 }
 
 /** Audits one claim against one cited excerpt. */
@@ -145,6 +152,11 @@ export type VerificationFailure =
 
 export interface VerificationResult {
   ok: boolean;
+  /**
+   * Set when the citation had to be widened to pass. The caller must store it:
+   * the quote shown to her has to be the one that was actually audited.
+   */
+  repairedExcerpt?: string;
   failure?: VerificationFailure;
   entailment?: EntailmentResult;
   estimatedCostUsd: number;
@@ -203,11 +215,58 @@ export async function verifyClaim(
   }
 
   const entailment = await checkEntailment(item.claim, item.excerpt, opts);
+  let cost = entailment.estimatedCostUsd;
+
   if (entailment.verdict !== 'supports') {
+    // INSUFFICIENT usually means under-cited, not wrong. Measured on her four
+    // decks, about a third of cards failed here and almost none were false: a
+    // slide splits a fact across a heading, a bullet and a table, and one span
+    // cannot carry all of it. So look on that same slide for the rest of the
+    // evidence before giving up.
+    //
+    // CONTRADICTS is never repaired. If the slide disagrees with the card, more
+    // quoting cannot fix it, and hunting for a span that rescues a contradicted
+    // claim is exactly how a gate gets talked out of a correct rejection.
+    const repairable =
+      opts.allowRepair !== false &&
+      entailment.verdict === 'insufficient' &&
+      !!entailment.unsupportedPart?.trim() &&
+      !!item.sourceText;
+
+    if (repairable) {
+      const repair = await repairCitation(
+        {
+          claim: item.claim,
+          unsupportedPart: entailment.unsupportedPart!,
+          excerpt: item.excerpt,
+          slideText: item.sourceText!,
+        },
+        opts,
+      );
+      cost += repair.estimatedCostUsd;
+
+      if (repair.excerpt) {
+        // Re-audited by the same adversarial check, which sees only the claim
+        // and the widened quote. It is not told a repair happened, so it cannot
+        // be softened by knowing one was attempted.
+        const recheck = await checkEntailment(item.claim, repair.excerpt, opts);
+        cost += recheck.estimatedCostUsd;
+
+        if (recheck.verdict === 'supports') {
+          return {
+            ok: true,
+            entailment: recheck,
+            repairedExcerpt: repair.excerpt,
+            estimatedCostUsd: cost,
+          };
+        }
+      }
+    }
+
     return {
       ok: false,
       entailment,
-      estimatedCostUsd: entailment.estimatedCostUsd,
+      estimatedCostUsd: cost,
       failure: {
         stage: 'entailment',
         reason: entailment.verdict,
@@ -218,5 +277,5 @@ export async function verifyClaim(
     };
   }
 
-  return { ok: true, entailment, estimatedCostUsd: entailment.estimatedCostUsd };
+  return { ok: true, entailment, estimatedCostUsd: cost };
 }
