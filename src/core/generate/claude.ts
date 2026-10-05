@@ -82,6 +82,9 @@ export interface ClaudeOptions {
   allowReadTool?: boolean;
 }
 
+/** Attempts to re-LAUNCH after a transient spawn failure. */
+const SPAWN_RETRIES = 3;
+
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 
 /**
@@ -193,16 +196,23 @@ export async function runClaude<T>(prompt: string, opts: ClaudeOptions): Promise
     input: opts.input,
   });
 
-  // The CLI updates itself in place. A run that happens to spawn during that
-  // swap gets ENOENT against a path that exists moments before and after, and
-  // a single such failure was enough to kill a twenty-minute generation.
-  // Observed in practice, not hypothetically: a measurement run died mid-deck
-  // and the binary's timestamp showed it had been replaced at that second.
+  // Two transient failures to LAUNCH show up on Windows, both observed here
+  // rather than imagined:
   //
-  // Retried once, briefly, and only for a failure to LAUNCH. A CLI that starts
-  // and then errors is reporting something real and is never retried here.
-  if (spawnError && !opts.signal?.aborted) {
-    await new Promise((r) => setTimeout(r, 1500));
+  //   ENOENT  - the CLI updates itself in place, and a run that spawns during
+  //             the swap fails against a path that exists moments before and
+  //             after. Confirmed from the binary's timestamp.
+  //   UNKNOWN - errno -4094, the system out of process handles. A verification
+  //             run over fifty cards hit this on forty-three of them and
+  //             reported a 17% yield that was entirely an artefact.
+  //
+  // Both clear on their own, so launching is retried with growing backoff. A
+  // CLI that STARTS and then errors is reporting something real and is never
+  // retried: only the spawn itself.
+  for (let attempt = 1; attempt <= SPAWN_RETRIES && spawnError && !opts.signal?.aborted; attempt++) {
+    // 1s, 3s, 7s: long enough for handles to be released under load, short
+    // enough that a genuinely missing binary still fails quickly.
+    await new Promise((r) => setTimeout(r, (2 ** attempt - 1) * 1000));
     ({ code, stdout, stderr, spawnError } = await runProcess(cliPath, args, {
       cwd: opts.workspaceDir,
       timeoutMs: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
