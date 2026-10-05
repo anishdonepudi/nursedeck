@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -87,7 +88,7 @@ describe('batching and rendering', () => {
   });
 });
 
-describe('live generation', () => {
+describe.skipIf(!CLI_AVAILABLE)('live generation', () => {
   let db: Db;
   let sourceId: string;
   let report: Awaited<ReturnType<typeof generateForLecture>>;
@@ -189,7 +190,7 @@ describe('live generation', () => {
   });
 });
 
-describe('resistance to invented content', () => {
+describe.skipIf(!CLI_AVAILABLE)('resistance to invented content', () => {
   it('discards claims the slides do not support', async () => {
     // This lecture names topics without giving the facts a student would want.
     // A model drawing on its own knowledge would happily supply the missing
@@ -244,7 +245,7 @@ describe('resistance to invented content', () => {
   }, 600_000);
 });
 
-describe('numeric grounding scope', () => {
+describe.skipIf(!CLI_AVAILABLE)('numeric grounding scope', () => {
   /**
    * Regression: the numeric check once ran over the whole NCLEX stem, so a
    * perfectly good vignette beginning "A 72-year-old client..." was rejected

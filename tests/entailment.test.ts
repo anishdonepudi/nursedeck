@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,7 +23,7 @@ const POTASSIUM =
   'The normal adult serum potassium concentration is 3.5-5.0 mEq/L. Never give ' +
   'potassium chloride by IV push, which is fatal; administer it only by controlled infusion.';
 
-describe('checkEntailment — accepts genuine support', () => {
+describe.skipIf(!CLI_AVAILABLE)('checkEntailment — accepts genuine support', () => {
   it('supports a claim the excerpt plainly states', async () => {
     const r = await checkEntailment(
       'Normal adult serum potassium is 3.5 to 5.0 mEq/L.',
@@ -42,7 +43,7 @@ describe('checkEntailment — accepts genuine support', () => {
   }, 180_000);
 });
 
-describe('checkEntailment — catches hallucination shapes', () => {
+describe.skipIf(!CLI_AVAILABLE)('checkEntailment — catches hallucination shapes', () => {
   it('catches a shifted numeric range', async () => {
     const r = await checkEntailment(
       'Normal adult serum potassium is 3.5 to 5.3 mEq/L.',
@@ -95,7 +96,7 @@ describe('checkEntailment — catches hallucination shapes', () => {
   }, 180_000);
 });
 
-describe('verifyClaim — full gate, cheapest check first', () => {
+describe.skipIf(!CLI_AVAILABLE)('verifyClaim — full gate, cheapest check first', () => {
   it('rejects a fabricated quote without spending a model call', async () => {
     const r = await verifyClaim(
       {

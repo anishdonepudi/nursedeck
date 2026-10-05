@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -186,7 +187,7 @@ describe('passage selection', () => {
 
 /* ------------------------------------------------------------------ */
 
-describe('corroboration against an authority', () => {
+describe.skipIf(!CLI_AVAILABLE)('corroboration against an authority', () => {
   let db: Db;
   let itemId: string;
 

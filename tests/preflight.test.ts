@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -255,7 +256,7 @@ describe('login flow', () => {
   });
 });
 
-describe('preflight — against the REAL Claude CLI on this machine', () => {
+describe.skipIf(!CLI_AVAILABLE)('preflight — against the REAL Claude CLI on this machine', () => {
   it('finds and validates the actual install', async () => {
     const located = await locateClaudeCli();
     expect(located, 'real Claude CLI should be locatable').toBeDefined();

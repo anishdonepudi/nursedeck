@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -17,7 +18,7 @@ beforeAll(async () => {
   health = await checkCliHealth();
 });
 
-describe('checkCliHealth', () => {
+describe.skipIf(!CLI_AVAILABLE)('checkCliHealth', () => {
   it('finds an installed, signed-in CLI', () => {
     expect(health.installed).toBe(true);
     expect(health.version).toMatch(/^\d+\.\d+\.\d+/);
@@ -33,7 +34,7 @@ describe('checkCliHealth', () => {
   });
 });
 
-describe('runClaude', () => {
+describe.skipIf(!CLI_AVAILABLE)('runClaude', () => {
   const schema = {
     type: 'object',
     properties: {

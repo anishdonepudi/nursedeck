@@ -1,3 +1,4 @@
+import { CLI_AVAILABLE } from './fixtures/has-cli.js';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -176,7 +177,7 @@ describe('PDF ingest', () => {
 /* Photographs — transcribed by the Claude CLI                         */
 /* ------------------------------------------------------------------ */
 
-describe('photo ingest', () => {
+describe.skipIf(!CLI_AVAILABLE)('photo ingest', () => {
   let imagePath: string;
   let workspaceDir: string;
 
