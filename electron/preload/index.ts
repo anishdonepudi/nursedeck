@@ -4,6 +4,7 @@ import {
   type NurseDeckBridge,
   type SignInProgress,
   type GenProgress,
+  type ImportProgress,
   type GenKind,
   type AnswerPayload,
   type ExamAnswer,
@@ -46,6 +47,12 @@ const bridge: NurseDeckBridge = {
     return () => ipcRenderer.removeListener(CHANNELS.generateProgress, listener);
   },
 
+  onImportProgress: (cb: (p: ImportProgress) => void) => {
+    const listener = (_e: unknown, payload: ImportProgress) => cb(payload);
+    ipcRenderer.on(CHANNELS.importProgress, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.importProgress, listener);
+  },
+
   listTriage: (lectureId: string) => ipcRenderer.invoke(CHANNELS.listTriage, lectureId),
   setItemStatus: (itemId: string, status: 'accepted' | 'rejected') =>
     ipcRenderer.invoke(CHANNELS.setItemStatus, itemId, status),
@@ -70,6 +77,8 @@ const bridge: NurseDeckBridge = {
   addCard: (card: NewUserCard) => ipcRenderer.invoke(CHANNELS.addCard, card),
   editCard: (edit: CardEdit) => ipcRenderer.invoke(CHANNELS.editCard, edit),
   deleteCard: (itemId: string) => ipcRenderer.invoke(CHANNELS.deleteCard, itemId),
+  gradeAnswer: (itemId: string, answer: string) =>
+    ipcRenderer.invoke(CHANNELS.gradeAnswer, itemId, answer),
   importDeck: (lectureId: string) => ipcRenderer.invoke(CHANNELS.importDeck, lectureId),
   vouchCard: (itemId: string) => ipcRenderer.invoke(CHANNELS.vouchCard, itemId),
   appInfo: () => ipcRenderer.invoke(CHANNELS.appInfo),

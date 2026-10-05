@@ -50,7 +50,7 @@ export function registerStudyIpc(): void {
     return result.canceled ? [] : result.filePaths;
   });
 
-  ipcMain.handle(CHANNELS.importLecture, async (_e, filePath: unknown): Promise<ImportResult> => {
+  ipcMain.handle(CHANNELS.importLecture, async (event, filePath: unknown): Promise<ImportResult> => {
     if (typeof filePath !== 'string') throw new Error('A file path is required.');
     const database = await ensureDb();
 
@@ -81,6 +81,16 @@ export function registerStudyIpc(): void {
           workspaceDir: getWorkspaceDir(),
           model: 'sonnet',
           ...(getCli() ? { cliPath: getCli()!.path } : {}),
+          // One model call per image-only slide, so a deck like hers can sit
+          // here for minutes. Without this the window says "Importing..." and
+          // never moves, which reads as hung.
+          onProgress: (p) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(CHANNELS.importProgress, {
+                phase: 'reading-images', slide: p.slide, totalSlides: p.total,
+              });
+            }
+          },
         });
         doc.blocks = transcribed.blocks;
         doc.warnings = [...doc.warnings, ...transcribed.warnings];
@@ -317,4 +327,57 @@ export function registerStudyModeIpc(): void {
       ...(p.mode ? { mode: p.mode } : {}),
     });
   });
+}
+
+/* --------------------------- teach-back grading --------------------------- */
+
+import { gradeTeachBack } from '@core/study/teachback.js';
+import type { TeachBackGrade } from '@shared/ipc.js';
+
+/**
+ * Marks a typed explanation against the key points stored on the item.
+ *
+ * The key points come from the DATABASE, never from the renderer, so the thing
+ * she is graded against is the item's own marking scheme and cannot be
+ * substituted by whatever the window happened to send.
+ */
+export function registerGradingIpc(): void {
+  ipcMain.handle(
+    CHANNELS.gradeAnswer,
+    async (_e, itemId: unknown, answer: unknown): Promise<TeachBackGrade> => {
+      if (typeof itemId !== 'string') throw new Error('A card id is required.');
+      if (typeof answer !== 'string') throw new Error('An answer is required.');
+
+      const database = await ensureDb();
+      const row = database
+        .prepare('SELECT front, payload FROM items WHERE id = ?')
+        .get(itemId) as { front: string; payload: string | null } | undefined;
+      if (!row) throw new Error('That card is no longer in your deck.');
+
+      const payload = row.payload ? (JSON.parse(row.payload) as { keyPoints?: string[] }) : {};
+
+      const result = await gradeTeachBack(
+        { question: row.front, keyPoints: payload.keyPoints ?? [], answer },
+        {
+          workspaceDir: getWorkspaceDir(),
+          model: 'sonnet',
+          maxBudgetUsd: 1,
+          ...(getCli() ? { cliPath: getCli()!.path } : {}),
+        },
+      );
+
+      return {
+        points: result.points.map((p) => ({
+          keyPoint: p.keyPoint,
+          covered: p.covered,
+          ...(p.evidence ? { evidence: p.evidence } : {}),
+          ...(p.note ? { note: p.note } : {}),
+        })),
+        covered: result.covered,
+        total: result.total,
+        feedback: result.feedback,
+        suggestedRating: result.suggestedRating,
+      };
+    },
+  );
 }

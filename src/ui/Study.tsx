@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { StudyCard, StudyStats } from '@shared/ipc.js';
+import type { StudyCard, StudyStats, TeachBackGrade } from '@shared/ipc.js';
 import { useSpeech } from './useSpeech.js';
 
 /**
@@ -77,6 +77,8 @@ export function Study({ lectureId, onDone }: Props) {
   const [revealed, setRevealed] = useState(false);
   const [typed, setTyped] = useState('');
   const [wasCorrect, setWasCorrect] = useState<boolean>();
+  const [grade, setGrade] = useState<TeachBackGrade>();
+  const [grading, setGrading] = useState(false);
   const [error, setError] = useState<string>();
   const speech = useSpeech();
   const startedAt = useRef(Date.now());
@@ -108,6 +110,7 @@ export function Study({ lectureId, onDone }: Props) {
     setTyped('');
     setConfidence(undefined);
     setWasCorrect(undefined);
+    setGrade(undefined);
     startedAt.current = Date.now();
     inputRef.current?.focus();
     // Reading the question aloud is the point of the feature: it lets her
@@ -118,10 +121,33 @@ export function Study({ lectureId, onDone }: Props) {
 
   const reveal = useCallback(() => {
     if (!current || revealed) return;
-    setWasCorrect(answerMatches(typed, current.expectedAnswer));
+    // A short-answer question asks her to EXPLAIN, so string comparison cannot
+    // judge it: a correct three-sentence answer would score wrong. Those are
+    // marked against the item's key points instead, which is what those key
+    // points were generated for.
+    if (current.kind !== 'qa') setWasCorrect(answerMatches(typed, current.expectedAnswer));
     setRevealed(true);
     if (speech.enabled) speech.speak(current.expectedAnswer);
   }, [current, revealed, typed, speech]);
+
+  const gradeExplanation = useCallback(async () => {
+    if (!current) return;
+    setGrading(true);
+    setError(undefined);
+    try {
+      const g = await window.nursedeck.gradeAnswer(current.id, typed);
+      setGrade(g);
+      // Covering every key point is "correct"; anything less is not, so the
+      // calibration figures stay honest about partial answers.
+      setWasCorrect(g.total > 0 && g.covered === g.total);
+      setRevealed(true);
+      if (speech.enabled) speech.speak(current.expectedAnswer);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGrading(false);
+    }
+  }, [current, typed, speech]);
 
   const answer = useCallback(
     async (rating: number) => {
@@ -146,13 +172,19 @@ export function Study({ lectureId, onDone }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { onDone(); return; }
-      if (e.key.toLowerCase() === 'r' && (e.target as HTMLElement)?.tagName !== 'INPUT') {
+      // TEXTAREA as well as INPUT: the explanation box is a textarea, and
+      // without this every "r" she types fires read-aloud instead.
+      const typing = ['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName);
+      if (e.key.toLowerCase() === 'r' && !typing) {
         e.preventDefault();
         speech.speak(revealed ? current?.expectedAnswer ?? '' : current?.prompt ?? '');
         return;
       }
       if (!revealed) {
-        if (e.key === 'Enter') { e.preventDefault(); reveal(); }
+        // An explanation is multi-line, so Enter must insert a newline rather
+        // than skip to the answer. Those are submitted with the button.
+        const multiline = current?.kind === 'qa';
+        if (e.key === 'Enter' && !multiline) { e.preventDefault(); reveal(); }
         return;
       }
       // Anki's muscle memory: 1-4 grade, space is Good.
@@ -239,15 +271,28 @@ export function Study({ lectureId, onDone }: Props) {
 
         {!revealed ? (
           <>
-            <input
-              ref={inputRef}
-              className="study-input"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              placeholder="Type your answer, then press Enter"
-              autoComplete="off"
-              spellCheck={false}
-            />
+            {/* An explanation needs room to write and marking against the key
+                points, not a one-line box compared character by character. */}
+            {current.kind === 'qa' ? (
+              <textarea
+                className="study-input study-explain"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder="Explain it in your own words, as if teaching someone"
+                rows={5}
+                spellCheck={false}
+              />
+            ) : (
+              <input
+                ref={inputRef}
+                className="study-input"
+                value={typed}
+                onChange={(e) => setTyped(e.target.value)}
+                placeholder="Type your answer, then press Enter"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            )}
             <div className="confidence">
               <span className="confidence-label">How sure are you?</span>
               {CONFIDENCE.map((c) => (
@@ -261,9 +306,27 @@ export function Study({ lectureId, onDone }: Props) {
                 </button>
               ))}
             </div>
-            <button type="button" className="primary" onClick={reveal}>
-              Show answer <kbd>Enter</kbd>
-            </button>
+            {current.kind === 'qa' ? (
+              <div className="gate-actions">
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => void gradeExplanation()}
+                  disabled={grading}
+                >
+                  {grading ? 'Marking...' : 'Mark my answer'}
+                </button>
+                {/* Always available: she must never be stuck behind a model
+                    call to see the answer she is trying to learn. */}
+                <button type="button" className="ghost" onClick={reveal} disabled={grading}>
+                  Just show me
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="primary" onClick={reveal}>
+                Show answer <kbd>Enter</kbd>
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -272,6 +335,28 @@ export function Study({ lectureId, onDone }: Props) {
                 You wrote: {typed}
               </div>
             )}
+            {grade && (
+              <div className="teachback">
+                <div className="teachback-head">
+                  You covered {grade.covered} of {grade.total}
+                </div>
+                <ul className="keypoints">
+                  {grade.points.map((p, i) => (
+                    <li key={i} className={p.covered ? 'kp-ok' : 'kp-missed'}>
+                      <span className="kp-mark" aria-hidden="true">{p.covered ? '✓' : '○'}</span>
+                      <span className="kp-text">
+                        {p.keyPoint}
+                        {/* Quoted back from what SHE wrote, never a paraphrase. */}
+                        {p.evidence && <em className="kp-evidence">you said: “{p.evidence}”</em>}
+                        {p.note && <em className="kp-note">{p.note}</em>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="teachback-feedback">{grade.feedback}</p>
+              </div>
+            )}
+
             <div className="study-back">{current.expectedAnswer}</div>
 
             {current.citation && (

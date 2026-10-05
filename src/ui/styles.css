@@ -538,3 +538,17 @@ kbd {
   .card-row { grid-template-columns: 1fr; }
   .card-tags, .card-actions { justify-content: flex-start; }
 }
+
+/* Teach-back grading: a marked explanation. */
+.study-explain { min-height: 110px; resize: vertical; font-family: inherit; line-height: 1.5; }
+.teachback { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.teachback-head { font-weight: 600; margin-bottom: 8px; }
+.keypoints { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
+.keypoints li { display: flex; gap: 8px; align-items: flex-start; }
+.kp-mark { flex: 0 0 auto; width: 16px; font-weight: 700; }
+.kp-ok .kp-mark { color: var(--ok); }
+.kp-missed .kp-mark { color: var(--warn); }
+.kp-text { display: flex; flex-direction: column; gap: 2px; }
+.kp-evidence, .kp-note { font-size: 0.86em; opacity: 0.8; font-style: italic; }
+.teachback-feedback { margin: 0; }
+.import-progress { margin: 4px 0 10px; }

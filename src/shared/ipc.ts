@@ -20,6 +20,7 @@ export const CHANNELS = {
   listLectures: 'lecture:list',
   generate: 'generate:run',
   generateProgress: 'generate:progress',
+  importProgress: 'lecture:import-progress',
   generateCancel: 'generate:cancel',
   listTriage: 'triage:list',
   setItemStatus: 'triage:setStatus',
@@ -36,6 +37,7 @@ export const CHANNELS = {
   addCard: 'deck:add',
   editCard: 'deck:edit',
   deleteCard: 'deck:delete',
+  gradeAnswer: 'study:grade',
   importDeck: 'deck:import',
   vouchCard: 'deck:vouch',
 } as const;
@@ -78,6 +80,8 @@ export interface NurseDeckBridge {
   generate(lectureId: string, kinds: GenKind[]): Promise<GenSummary>;
   cancelGeneration(): Promise<void>;
   onGenerateProgress(cb: (p: GenProgress) => void): () => void;
+  /** Import reads slide pictures, which takes a model call each. */
+  onImportProgress(cb: (p: ImportProgress) => void): () => void;
   listTriage(lectureId: string): Promise<TriageItem[]>;
   setItemStatus(itemId: string, status: 'accepted' | 'rejected'): Promise<void>;
   verifyItem(itemId: string): Promise<TriageCitation[]>;
@@ -92,6 +96,8 @@ export interface NurseDeckBridge {
     lectureId: string | undefined,
     format: 'anki-tsv' | 'quizlet-csv' | 'apkg',
   ): Promise<{ saved: boolean; path?: string; cardCount: number; skipped: number }>;
+  /** Marks a typed explanation against a Q&A item's key points. */
+  gradeAnswer(itemId: string, answer: string): Promise<TeachBackGrade>;
   /** Imports a deck somebody else made. Cards land unverified and unstudiable. */
   importDeck(lectureId: string): Promise<ImportDeckSummary>;
   /** Records that she stands behind an imported card, making it studiable. */
@@ -131,6 +137,13 @@ export interface GenProgress {
   produced: number;
   rejected: number;
   phase: 'generating' | 'validating' | 'verifying' | 'done';
+}
+
+export interface ImportProgress {
+  /** 'reading' while pictures are being transcribed. */
+  phase: 'reading-images';
+  slide: number;
+  totalSlides: number;
 }
 
 export interface GenSummary {
@@ -337,6 +350,22 @@ export interface DeckCardRow {
   edited: boolean;
   verified: boolean;
   lectureTitle: string;
+}
+
+export interface KeyPointResult {
+  keyPoint: string;
+  covered: boolean;
+  /** Words SHE wrote that cover it. Absent when she did not. */
+  evidence?: string;
+  note?: string;
+}
+
+export interface TeachBackGrade {
+  points: KeyPointResult[];
+  covered: number;
+  total: number;
+  feedback: string;
+  suggestedRating: 1 | 2 | 3 | 4;
 }
 
 export interface ImportDeckSummary {

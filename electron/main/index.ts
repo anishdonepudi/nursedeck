@@ -5,7 +5,7 @@ import { runPreflight, type PreflightReport } from '@core/preflight/checks.js';
 import { launchLogin, waitForLogin } from '@core/preflight/login.js';
 import { clearCliCache, type CliCommand } from '@core/generate/cli-locator.js';
 import { CHANNELS, type SignInProgress, type SignInOutcome } from '@shared/ipc.js';
-import { registerStudyIpc, registerStudyModeIpc } from '../ipc/study.js';
+import { registerStudyIpc, registerStudyModeIpc, registerGradingIpc } from '../ipc/study.js';
 import { registerExamIpc } from '../ipc/exam.js';
 import { registerInsightsIpc, registerDeckIpc, registerImportIpc } from '../ipc/insights.js';
 import { configureIpcContext, setCliCommand } from '../ipc/context.js';
@@ -182,6 +182,7 @@ if (!app.requestSingleInstanceLock()) {
     registerInsightsIpc();
     registerDeckIpc();
     registerImportIpc();
+    registerGradingIpc();
     createWindow();
 
     app.on('activate', () => {

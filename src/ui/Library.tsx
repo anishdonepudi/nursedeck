@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { LectureSummary, GenKind, GenProgress, GenSummary } from '@shared/ipc.js';
+import type {
+  LectureSummary, GenKind, GenProgress, GenSummary, ImportProgress,
+} from '@shared/ipc.js';
 
 /**
  * The home screen: import a lecture, generate from it, then review.
@@ -39,6 +41,7 @@ export function Library({
   const [kinds, setKinds] = useState<GenKind[]>(['flashcard', 'cloze']);
   const [busy, setBusy] = useState<'importing' | 'generating'>();
   const [progress, setProgress] = useState<GenProgress>();
+  const [importProgress, setImportProgress] = useState<ImportProgress>();
   const [summary, setSummary] = useState<GenSummary>();
   const [error, setError] = useState<string>();
 
@@ -52,6 +55,7 @@ export function Library({
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => window.nursedeck.onGenerateProgress(setProgress), []);
+  useEffect(() => window.nursedeck.onImportProgress(setImportProgress), []);
 
   const importFiles = useCallback(async () => {
     setError(undefined);
@@ -59,6 +63,7 @@ export function Library({
     if (paths.length === 0) return;
 
     setBusy('importing');
+    setImportProgress(undefined);
     try {
       for (const p of paths) {
         const r = await window.nursedeck.importLecture(p);
@@ -69,6 +74,7 @@ export function Library({
       setError((e as Error).message);
     } finally {
       setBusy(undefined);
+      setImportProgress(undefined);
     }
   }, [refresh]);
 
@@ -116,6 +122,19 @@ export function Library({
             </button>
           </div>
         </div>
+
+        {/*
+          Reading the pictures costs a model call per image-only slide, and on
+          her acid-base deck that is eleven of them. Without this the window
+          said "Importing..." and never moved, which reads as hung.
+        */}
+        {busy === 'importing' && importProgress && (
+          <p className="waiting import-progress">
+            <span className="spinner" aria-hidden="true" />
+            Reading the text in slide pictures - {importProgress.slide} of{' '}
+            {importProgress.totalSlides}
+          </p>
+        )}
 
         {lectures.length === 0 ? (
           <p className="hint empty">
