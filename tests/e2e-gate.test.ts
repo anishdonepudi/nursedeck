@@ -141,10 +141,24 @@ describe('E2E startup gate', () => {
 
     expect(await page.getByRole('button', { name: 'Start studying' }).count()).toBe(0);
 
-    // An actionable install command, not just an error.
+    // An actionable install command, not just an error -- and the one that
+    // needs no Node.js. Telling her to install a JavaScript runtime first was
+    // a hurdle that is not actually in the way: Electron carries its own Node.
+    const expected = process.platform === 'darwin'
+      ? 'https://claude.ai/install.sh'
+      : 'https://claude.ai/install.ps1';
     await expect
-      .poll(() => page.locator('.copy-row code').textContent(), { timeout: 30_000 })
-      .toContain('npm install -g @anthropic-ai/claude-code');
+      .poll(() => page.locator('.copy-row code').first().textContent(), { timeout: 30_000 })
+      .toContain(expected);
+
+    // And it says where to paste it, which is the step a non-technical user
+    // actually gets stuck on.
+    const shell = process.platform === 'darwin' ? 'Terminal' : 'PowerShell';
+    expect(await page.locator('.remedy').innerText()).toContain(shell);
+
+    // npm stays available for anyone who already has Node, but tucked away so
+    // the primary route is unambiguous.
+    expect(await page.locator('.install-alt').count()).toBe(1);
   }, 180_000);
 
   it('WARNS but still allows entry when billing would be per-use', async () => {

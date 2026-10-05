@@ -11,7 +11,35 @@ import type { CheckResult, RemedyAction } from '@shared/preflight-types.js';
  * restarting the app.
  */
 
-const INSTALL_COMMAND = 'npm install -g @anthropic-ai/claude-code';
+/**
+ * How to install Claude Code, per platform.
+ *
+ * The native installer is primary and the npm one is the fallback, which is the
+ * opposite of what this used to say. It matters for a non-technical user: npm
+ * requires installing Node.js first, and NurseDeck itself has never needed Node
+ * -- Electron carries its own. Telling a nursing student to install a
+ * JavaScript runtime before she can make a flashcard was asking her to clear a
+ * hurdle that is not actually in the way.
+ *
+ * Commands differ by shell, so the right one is shown rather than both.
+ */
+const INSTALL_COMMANDS: Record<'mac' | 'windows', { primary: string; shell: string }> = {
+  mac: {
+    primary: 'curl -fsSL https://claude.ai/install.sh | bash',
+    shell: 'Terminal',
+  },
+  windows: {
+    primary: 'irm https://claude.ai/install.ps1 | iex',
+    shell: 'PowerShell',
+  },
+};
+
+const NPM_FALLBACK = 'npm install -g @anthropic-ai/claude-code';
+
+/** Platform, from the renderer. Used only to choose which command to show. */
+function currentPlatform(): 'mac' | 'windows' {
+  return navigator.userAgent.includes('Mac') ? 'mac' : 'windows';
+}
 
 function StatusDot({ status }: { status: CheckResult['status'] }) {
   const label = status === 'ok' ? 'Passed' : status === 'warn' ? 'Warning' : 'Failed';
@@ -104,19 +132,30 @@ function Remedy({ remedy, onSignIn, signingIn, progress, onCancelSignIn }: Remed
             ? 'NurseDeck uses Claude Code to read your lectures. Install it with:'
             : 'Update Claude Code to a supported version with:'}
         </p>
-        <CopyRow text={INSTALL_COMMAND} />
         <p className="hint">
-          Needs{' '}
+          Open <strong>{INSTALL_COMMANDS[currentPlatform()].shell}</strong> and paste this:
+        </p>
+        <CopyRow text={INSTALL_COMMANDS[currentPlatform()].primary} />
+        <p className="hint">
+          Then sign in with your Claude subscription and choose “Check again”.
+        </p>
+        <details className="install-alt">
+          <summary>Already have Node.js?</summary>
+          <p className="hint">You can install it through npm instead:</p>
+          <CopyRow text={NPM_FALLBACK} />
+        </details>
+        <p className="hint">
+          More detail in the{' '}
           <a
-            href="https://nodejs.org"
+            href="https://docs.claude.com/en/docs/claude-code/setup"
             onClick={(e) => {
               e.preventDefault();
-              void window.nursedeck.openExternal('https://nodejs.org');
+              void window.nursedeck.openExternal('https://docs.claude.com/en/docs/claude-code/setup');
             }}
           >
-            Node.js
+            Claude Code setup guide
           </a>
-          . After installing, choose “Check again”.
+          .
         </p>
       </div>
     );

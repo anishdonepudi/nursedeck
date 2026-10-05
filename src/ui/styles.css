@@ -565,3 +565,7 @@ kbd {
 .map-node circle { fill: var(--panel); stroke: var(--line); stroke-width: 2; }
 .map-node:hover circle, .map-node-on circle { stroke: var(--accent); }
 .map-node text { fill: var(--text); font-size: 12px; pointer-events: none; }
+
+/* Fallback install route, collapsed so the primary one is unambiguous. */
+.install-alt { margin: 8px 0; }
+.install-alt summary { cursor: pointer; color: var(--muted); font-size: 0.9em; }

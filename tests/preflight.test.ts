@@ -271,3 +271,41 @@ describe.skipIf(!CLI_AVAILABLE)('preflight — against the REAL Claude CLI on th
     expect(report.auth?.loggedIn).toBe(true);
   });
 });
+
+describe('preflight — the network check', () => {
+  it('reports connectivity without ever blocking startup', async () => {
+    const dir = await fresh('net');
+    const cli = await makeSpawnableStub(await fresh('net-cli'));
+    const report = await runPreflight({ dataDir: dir, cliOverride: cli });
+
+    const network = report.checks.find((c) => c.id === 'network');
+    expect(network).toBeDefined();
+    // Everything already in her deck works offline -- studying, exams, export.
+    // Blocking entry over dropped wifi would lock her out of her own cards.
+    expect(network!.blocking).toBe(false);
+    expect(['ok', 'warn']).toContain(network!.status);
+  });
+
+  it('never makes the overall verdict depend on the network', async () => {
+    const dir = await fresh('net2');
+    const cli = await makeSpawnableStub(await fresh('net2-cli'));
+    const report = await runPreflight({ dataDir: dir, cliOverride: cli });
+
+    const blockingFailures = report.checks.filter((c) => c.blocking && c.status === 'fail');
+    expect(report.ok).toBe(blockingFailures.length === 0);
+    expect(blockingFailures.map((c) => c.id)).not.toContain('network');
+  });
+
+  it('explains what still works when offline', async () => {
+    const dir = await fresh('net3');
+    const cli = await makeSpawnableStub(await fresh('net3-cli'));
+    const report = await runPreflight({ dataDir: dir, cliOverride: cli });
+    const network = report.checks.find((c) => c.id === 'network')!;
+
+    // Only asserted when the warning actually fires; on a connected machine
+    // there is no detail to check.
+    if (network.status === 'warn') {
+      expect(network.detail).toMatch(/offline|without a connection|needs a connection/i);
+    }
+  });
+});

@@ -304,6 +304,42 @@ export async function runPreflight(opts: PreflightOptions): Promise<PreflightRep
     );
   }
 
+  /* Network. Claude Code reaches Anthropic over the internet, so without a
+   * connection generation fails partway through with a CLI error that says
+   * nothing useful. Checked last and NOT blocking: everything already in her
+   * deck -- studying, exams, the dashboard, export -- works entirely offline,
+   * and blocking entry over a dropped wifi connection would be wrong. */
+  checks.push(await checkConnectivity());
+
   report.ok = !checks.some((c) => c.blocking && c.status === 'fail');
   return report;
+}
+
+/**
+ * Whether the machine can reach Anthropic.
+ *
+ * A DNS lookup rather than a request: it is enough to tell "no network" from
+ * "network fine", costs nothing, and sends no data anywhere.
+ */
+async function checkConnectivity(): Promise<CheckResult> {
+  const label = 'Connected to the internet';
+  try {
+    const { lookup } = await import('node:dns/promises');
+    await Promise.race([
+      lookup('api.anthropic.com'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), 4000)),
+    ]);
+    return { id: 'network', label, status: 'ok', blocking: false };
+  } catch {
+    return {
+      id: 'network',
+      label,
+      status: 'warn',
+      detail:
+        'Could not reach Anthropic. Studying, exams and export all work offline, ' +
+        'but making new cards from a lecture needs a connection.',
+      blocking: false,
+      remedy: 'none',
+    };
+  }
 }
