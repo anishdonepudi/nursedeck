@@ -19,6 +19,10 @@ import { verifyClaim } from '../src/core/validate/entailment.js';
 
 const workspaceDir = await mkdtemp(join(tmpdir(), 'nursedeck-repair-'));
 let baseOk = 0, repairOk = 0, recovered = 0, cost = 0;
+// Recovery splits two ways and the difference matters: a widened quote is the
+// repair working, while an unchanged quote that passes on a second ask is just
+// auditor variance and must not be credited to this feature.
+let byWidening = 0, byVariance = 0;
 const recoveredCards: { front: string; before: string; after: string; slide: number }[] = [];
 const violations: string[] = [];
 
@@ -63,6 +67,7 @@ for (const file of process.argv.slice(2)) {
     repairOk++;
     recovered++;
     const final = on.repairedExcerpt ?? c.excerpt;
+    if (on.repairedExcerpt) byWidening++; else byVariance++;
 
     // Independent re-check of anything repair rescued.
     if (!verifyVerbatim(final, text).ok) {
@@ -80,6 +85,8 @@ for (const file of process.argv.slice(2)) {
 console.log(`\n${'='.repeat(74)}`);
 console.log(`verified WITHOUT repair : ${baseOk}`);
 console.log(`verified WITH repair    : ${repairOk}  (+${recovered})`);
+console.log(`  of which widened quote : ${byWidening}`);
+console.log(`  of which audit variance: ${byVariance}`);
 console.log(`integrity violations    : ${violations.length}`);
 for (const v of violations) console.log(`  ${v}`);
 

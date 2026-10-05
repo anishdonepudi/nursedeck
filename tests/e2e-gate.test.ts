@@ -192,6 +192,7 @@ describe('E2E startup gate', () => {
       'appInfo',
       'cancelGeneration',
       'cancelSignIn',
+      'conceptMap',
       'corroborate',
       'dashboard',
       'deleteCard',
