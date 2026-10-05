@@ -5,6 +5,7 @@ import {
   type SignInProgress,
   type GenProgress,
   type ImportProgress,
+  type VerifyProgress,
   type GenKind,
   type AnswerPayload,
   type ExamAnswer,
@@ -57,6 +58,13 @@ const bridge: NurseDeckBridge = {
   setItemStatus: (itemId: string, status: 'accepted' | 'rejected') =>
     ipcRenderer.invoke(CHANNELS.setItemStatus, itemId, status),
   verifyItem: (itemId: string) => ipcRenderer.invoke(CHANNELS.verifyItem, itemId),
+  verifyAll: (lectureId: string) => ipcRenderer.invoke(CHANNELS.verifyAll, lectureId),
+  cancelVerifyAll: () => ipcRenderer.invoke(CHANNELS.verifyAllCancel),
+  onVerifyProgress: (cb: (p: VerifyProgress) => void) => {
+    const listener = (_e: unknown, payload: VerifyProgress) => cb(payload);
+    ipcRenderer.on(CHANNELS.verifyProgress, listener);
+    return () => ipcRenderer.removeListener(CHANNELS.verifyProgress, listener);
+  },
 
   studyQueue: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyQueue, lectureId),
   studyStats: (lectureId?: string) => ipcRenderer.invoke(CHANNELS.studyStats, lectureId),

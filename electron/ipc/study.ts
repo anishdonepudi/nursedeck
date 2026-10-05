@@ -12,10 +12,11 @@ import { ingestDocx } from '@core/ingest/docx.js';
 import { ingestImages } from '@core/ingest/image.js';
 import { extname } from 'node:path';
 import { generateForLecture, type GenerationKind } from '@core/generate/pipeline.js';
-import { verifyClaim } from '@core/validate/entailment.js';
+import { verifyPendingItems, verifyOneCitation } from '@core/validate/batch.js';
 import { CHANNELS } from '@shared/ipc.js';
 import type {
   ImportResult, LectureSummary, GenSummary, TriageItem, TriageCitation, GenProgress,
+  VerifyAllSummary,
 } from '@shared/ipc.js';
 
 /**
@@ -30,6 +31,8 @@ const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif']);
 
 /** Held so the UI can cancel an in-flight generation run. */
 let generationAbort: AbortController | undefined;
+/** Held so the UI can cancel a bulk verification run. */
+let verifyAbort: AbortController | undefined;
 
 export function registerStudyIpc(): void {
 
@@ -223,30 +226,55 @@ export function registerStudyIpc(): void {
 
     for (const c of listCitations(database, itemId)) {
       if (c.verdict === 'verified') continue;
-      const sourceText = getSourceText(database, c.sourceId);
-      const result = await verifyClaim(
-        { claim: c.claim, excerpt: c.excerpt, sourceText, tier: c.licenseTier },
-        { workspaceDir: getWorkspaceDir(), ...(getCli() ? { cliPath: getCli()!.path } : {}) },
-      );
-      // A widened citation has to be WRITTEN BACK. The audit that passed was
-      // run against the wider quote, so storing the original would show her a
-      // quote that was never the one verified.
-      if (result.ok && result.repairedExcerpt) {
-        database
-          .prepare('UPDATE citations SET excerpt = ? WHERE id = ?')
-          .run(result.repairedExcerpt, c.id);
-      }
-
-      setCitationVerdict(
-        database,
-        c.id,
-        result.ok ? 'verified' : 'failed',
-        result.failure
-          ? { stage: result.failure.stage, detail: 'detail' in result.failure ? result.failure.detail : undefined }
-          : undefined,
-      );
+      // The SAME function the bulk run uses. Two copies of this would drift,
+      // and the drift would be in what counts as verified.
+      await verifyOneCitation(database, c, {
+        workspaceDir: getWorkspaceDir(),
+        ...(getCli() ? { cliPath: getCli()!.path } : {}),
+      });
     }
     return listCitations(database, itemId).map(toTriageCitation);
+  });
+
+  /**
+   * Verifies every pending card in a lecture.
+   *
+   * Costs a model call per card, so it reports progress, is cancellable, and
+   * stops at a budget rather than spending without bound.
+   */
+  ipcMain.handle(CHANNELS.verifyAll, async (event, lectureId: unknown): Promise<VerifyAllSummary> => {
+    if (typeof lectureId !== 'string') throw new Error('A lecture id is required.');
+    const database = await ensureDb();
+
+    verifyAbort?.abort();
+    verifyAbort = new AbortController();
+
+    const report = await verifyPendingItems(database, {
+      lectureId,
+      workspaceDir: getWorkspaceDir(),
+      model: 'sonnet',
+      maxBudgetUsd: 5,
+      signal: verifyAbort.signal,
+      ...(getCli() ? { cliPath: getCli()!.path } : {}),
+      onProgress: (p) => {
+        if (!event.sender.isDestroyed()) event.sender.send(CHANNELS.verifyProgress, p);
+      },
+    });
+
+    return {
+      checked: report.checked,
+      verified: report.verified,
+      failed: report.failed,
+      remaining: report.remaining,
+      estimatedCostUsd: report.estimatedCostUsd,
+      errors: report.errors,
+      ...(report.stoppedEarly ? { stoppedEarly: report.stoppedEarly } : {}),
+    };
+  });
+
+  ipcMain.handle(CHANNELS.verifyAllCancel, () => {
+    verifyAbort?.abort();
+    verifyAbort = undefined;
   });
 }
 

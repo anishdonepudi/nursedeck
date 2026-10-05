@@ -192,6 +192,7 @@ describe('E2E startup gate', () => {
       'appInfo',
       'cancelGeneration',
       'cancelSignIn',
+      'cancelVerifyAll',
       'conceptMap',
       'corroborate',
       'dashboard',
@@ -208,6 +209,7 @@ describe('E2E startup gate', () => {
       'onGenerateProgress',
       'onImportProgress',
       'onSignInProgress',
+      'onVerifyProgress',
       'openExternal',
       'pickLecture',
       'preflight',
@@ -217,6 +219,7 @@ describe('E2E startup gate', () => {
       'studyQueue',
       'studyStats',
       'submitExam',
+      'verifyAll',
       'verifyItem',
       'vouchCard',
     ]);

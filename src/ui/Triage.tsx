@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { TriageItem, TriageCitation, CorroborationReport } from '@shared/ipc.js';
+import type {
+  TriageItem, TriageCitation, CorroborationReport, VerifyProgress, VerifyAllSummary,
+} from '@shared/ipc.js';
 
 /**
  * Card triage.
@@ -108,21 +110,22 @@ export function Triage({ lectureId, onDone }: Props) {
   const [corroborating, setCorroborating] = useState(false);
   const [corroboration, setCorroboration] = useState<CorroborationReport>();
   const [error, setError] = useState<string>();
+  const [verifyingAll, setVerifyingAll] = useState(false);
+  const [verifyProgress, setVerifyProgress] = useState<VerifyProgress>();
+  const [verifySummary, setVerifySummary] = useState<VerifyAllSummary>();
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const list = await window.nursedeck.listTriage(lectureId);
-        if (!cancelled) setItems(list);
-      } catch (e) {
-        if (!cancelled) setError((e as Error).message);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  // Extracted so the bulk check can re-read after it rewrites every verdict.
+  const load = useCallback(async () => {
+    try {
+      setItems(await window.nursedeck.listTriage(lectureId));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }, [lectureId]);
+
+  useEffect(() => { void load(); }, [load]);
 
   const current = items[index];
 
@@ -178,6 +181,26 @@ export function Triage({ lectureId, onDone }: Props) {
     }
   }, [current]);
 
+  const verifyAll = useCallback(async () => {
+    setVerifyingAll(true);
+    setVerifySummary(undefined);
+    setVerifyProgress(undefined);
+    setError(undefined);
+    try {
+      const summary = await window.nursedeck.verifyAll(lectureId);
+      setVerifySummary(summary);
+      // Re-read, because verdicts changed underneath every card on screen.
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setVerifyingAll(false);
+      setVerifyProgress(undefined);
+    }
+  }, [lectureId, load]);
+
+  useEffect(() => window.nursedeck.onVerifyProgress(setVerifyProgress), []);
+
   // Anki-style single-key decisions, so a long review never needs the mouse.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -232,7 +255,44 @@ export function Triage({ lectureId, onDone }: Props) {
         </span>
         <span className="triage-kind">{current.kind}</span>
         <span className="triage-tally">kept {kept} - discarded {discarded}</span>
+
+        {/*
+          Verification was one card at a time, which meant fifty clicks to find
+          out which cards were studiable. A guarantee nobody has the patience to
+          reach is not a working guarantee.
+        */}
+        {verifyingAll ? (
+          <button type="button" className="chip" onClick={() => void window.nursedeck.cancelVerifyAll()}>
+            Stop checking
+          </button>
+        ) : (
+          <button type="button" className="chip" onClick={() => void verifyAll()}>
+            Check all {items.length}
+          </button>
+        )}
       </header>
+
+      {verifyingAll && (
+        <p className="waiting">
+          <span className="spinner" aria-hidden="true" />
+          {verifyProgress
+            ? `Checking sources - card ${verifyProgress.item} of ${verifyProgress.totalItems}` +
+              ` (${verifyProgress.verified} verified, ${verifyProgress.failed} not supported)`
+            : 'Checking sources'}
+        </p>
+      )}
+
+      {verifySummary && !verifyingAll && (
+        <p className="hint notice">
+          Checked {verifySummary.checked}: {verifySummary.verified} verified and ready to study,
+          {' '}{verifySummary.failed} not supported by the slide.
+          {verifySummary.remaining > 0 &&
+            ` ${verifySummary.remaining} not checked${
+              verifySummary.stoppedEarly === 'budget' ? ' (stopped at the spending limit)' : ''
+            }.`}
+          {verifySummary.errors.length > 0 && ` ${verifySummary.errors.length} could not be checked.`}
+        </p>
+      )}
 
       <article className="triage-card">
         <div className="triage-front">{current.front}</div>

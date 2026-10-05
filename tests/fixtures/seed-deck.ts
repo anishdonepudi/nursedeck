@@ -63,3 +63,59 @@ export async function seedStudiableCard(dataDir: string): Promise<{ lectureId: s
   db.close();
   return { lectureId, itemId };
 }
+
+export const SEEDED_QA_FRONT = 'Explain why potassium is never given by IV push.';
+export const SEEDED_QA_KEY_POINTS = [
+  'A rapid rise in serum potassium stops the heart',
+  'Potassium must be diluted and infused slowly',
+];
+
+/**
+ * Adds a short-answer card and an unverified card to an already-seeded deck.
+ *
+ * The Q&A card exercises teach-back grading, which needs key points stored on
+ * the item. The unverified one exercises bulk verification, which has nothing
+ * to do if every card is already verified.
+ */
+export async function seedExtraCards(dataDir: string, lectureId: string): Promise<{
+  qaItemId: string;
+  pendingItemId: string;
+}> {
+  const db = new DatabaseSync(join(dataDir, 'nursedeck.db'));
+  db.exec('PRAGMA foreign_keys = ON');
+
+  const sourceRow = db
+    .prepare('SELECT source_id FROM lectures WHERE id = ?')
+    .get(lectureId) as { source_id: string };
+  const sourceId = sourceRow.source_id;
+
+  const qaItemId = randomUUID();
+  db.prepare(
+    `INSERT INTO items (id, lecture_id, kind, status, front, back, payload)
+     VALUES (?, ?, 'qa', 'accepted', ?, ?, ?)`,
+  ).run(
+    qaItemId,
+    lectureId,
+    SEEDED_QA_FRONT,
+    'IV push potassium causes a lethal rise in serum potassium; it must be diluted and infused slowly.',
+    JSON.stringify({ keyPoints: SEEDED_QA_KEY_POINTS }),
+  );
+  db.prepare(
+    `INSERT INTO citations (id, item_id, source_id, claim, excerpt, verdict, checked_at)
+     VALUES (?, ?, ?, ?, ?, 'verified', datetime('now'))`,
+  ).run(randomUUID(), qaItemId, sourceId, 'IV push potassium stops the heart', SEEDED_EXCERPT);
+
+  // Pending AND unverified: the state bulk verification exists to clear.
+  const pendingItemId = randomUUID();
+  db.prepare(
+    `INSERT INTO items (id, lecture_id, kind, status, front, back)
+     VALUES (?, ?, 'flashcard', 'pending', 'Which electrolyte is primarily intracellular?', 'Potassium')`,
+  ).run(pendingItemId, lectureId);
+  db.prepare(
+    `INSERT INTO citations (id, item_id, source_id, claim, excerpt, verdict)
+     VALUES (?, ?, ?, ?, ?, 'unverified')`,
+  ).run(randomUUID(), pendingItemId, sourceId, 'Potassium is primarily intracellular', SEEDED_EXCERPT);
+
+  db.close();
+  return { qaItemId, pendingItemId };
+}

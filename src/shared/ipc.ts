@@ -25,6 +25,9 @@ export const CHANNELS = {
   listTriage: 'triage:list',
   setItemStatus: 'triage:setStatus',
   verifyItem: 'triage:verify',
+  verifyAll: 'triage:verify-all',
+  verifyAllCancel: 'triage:verify-all-cancel',
+  verifyProgress: 'triage:verify-progress',
   studyQueue: 'study:queue',
   studyStats: 'study:stats',
   answerCard: 'study:answer',
@@ -86,6 +89,10 @@ export interface NurseDeckBridge {
   listTriage(lectureId: string): Promise<TriageItem[]>;
   setItemStatus(itemId: string, status: 'accepted' | 'rejected'): Promise<void>;
   verifyItem(itemId: string): Promise<TriageCitation[]>;
+  /** Verifies every pending card in a lecture. Cancellable and budgeted. */
+  verifyAll(lectureId: string): Promise<VerifyAllSummary>;
+  cancelVerifyAll(): Promise<void>;
+  onVerifyProgress(cb: (p: VerifyProgress) => void): () => void;
   studyQueue(lectureId?: string): Promise<StudyCard[]>;
   studyStats(lectureId?: string): Promise<StudyStats>;
   answerCard(payload: AnswerPayload): Promise<void>;
@@ -140,6 +147,24 @@ export interface GenProgress {
   produced: number;
   rejected: number;
   phase: 'generating' | 'validating' | 'verifying' | 'done';
+}
+
+export interface VerifyProgress {
+  item: number;
+  totalItems: number;
+  verified: number;
+  failed: number;
+}
+
+export interface VerifyAllSummary {
+  checked: number;
+  verified: number;
+  failed: number;
+  /** Cards not reached because the run was stopped. */
+  remaining: number;
+  estimatedCostUsd: number;
+  errors: string[];
+  stoppedEarly?: 'cancelled' | 'budget';
 }
 
 export interface ImportProgress {
