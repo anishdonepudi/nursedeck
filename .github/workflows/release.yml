@@ -17,30 +17,35 @@ on:
         options: [both, mac, windows]
 
 jobs:
+  # The platform choice is resolved into a matrix here rather than filtered
+  # with a job-level `if`. GitHub does NOT expose the `matrix` context to a
+  # job's `if`, so the obvious spelling fails the whole workflow to parse --
+  # "Unrecognized named-value: 'matrix'" -- and nothing runs at all.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        run: |
+          mac='{"os":"macos-latest","name":"mac","script":"dist:mac","artifact":"NurseDeck-mac-universal","pattern":"release/*.dmg"}'
+          win='{"os":"windows-latest","name":"windows","script":"dist:win","artifact":"NurseDeck-win-x64","pattern":"release/*.exe"}'
+          case "${{ github.event.inputs.platform || 'both' }}" in
+            mac)     include="[$mac]" ;;
+            windows) include="[$win]" ;;
+            *)       include="[$mac,$win]" ;;
+          esac
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: setup
     strategy:
       # One platform failing should not discard the other's artifact.
       fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            name: mac
-            script: dist:mac
-            artifact: NurseDeck-mac-universal
-            pattern: release/*.dmg
-          - os: windows-latest
-            name: windows
-            script: dist:win
-            artifact: NurseDeck-win-x64
-            pattern: release/*.exe
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
-
-    # Honour the manual platform choice; always build both for a tag.
-    if: >-
-      github.event_name != 'workflow_dispatch' ||
-      github.event.inputs.platform == 'both' ||
-      github.event.inputs.platform == matrix.name
 
     steps:
       - uses: actions/checkout@v4
