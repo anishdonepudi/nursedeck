@@ -228,10 +228,12 @@ export function registerStudyIpc(): void {
       if (c.verdict === 'verified') continue;
       // The SAME function the bulk run uses. Two copies of this would drift,
       // and the drift would be in what counts as verified.
-      await verifyOneCitation(database, c, {
-        workspaceDir: getWorkspaceDir(),
-        ...(getCli() ? { cliPath: getCli()!.path } : {}),
-      });
+      await verifyOneCitation(
+        database,
+        c,
+        { workspaceDir: getWorkspaceDir(), ...(getCli() ? { cliPath: getCli()!.path } : {}) },
+        itemId,
+      );
     }
     return listCitations(database, itemId).map(toTriageCitation);
   });

@@ -333,3 +333,82 @@ describe('REGRESSION: one definition of slide text', () => {
     expect(text).toContain('NEVER GIVE POTASSIUM IV PUSH');
   });
 });
+
+/* ------------------- verification is scoped to the slide ------------------- */
+
+describe('REGRESSION: a citation is checked against ITS OWN slide', () => {
+  /**
+   * The bug this pins, found by auditing the real acid-base deck: verification
+   * used the whole lecture's concatenated text. Citation repair could then
+   * stitch a fragment from slide 3 to one from slide 30 and the result verified
+   * against the concatenation while appearing on no single slide. Five such
+   * quotes reached a deck before the audit caught them.
+   */
+  function twoSlideLecture(): { itemId: string } {
+    const slideOne = randomUUID();
+    const slideTwo = randomUUID();
+    db.prepare(
+      `INSERT INTO blocks (id, lecture_id, ordinal, heading, body)
+       VALUES (?, ?, 1, 'Alterations in Potassium', 'Hypokalemia (<3.5)')`,
+    ).run(slideOne, lectureId);
+    db.prepare(
+      `INSERT INTO blocks (id, lecture_id, ordinal, heading, body)
+       VALUES (?, ?, 2, 'Alterations in Calcium', 'Hypocalcemia: Trousseau sign')`,
+    ).run(slideTwo, lectureId);
+
+    const itemId = insertItem(
+      db,
+      { lectureId, kind: 'flashcard', front: 'Q', back: 'A', blockIds: [slideOne] },
+      [{ sourceId, claim: 'Q A', excerpt: 'Hypokalemia (<3.5)', verdict: 'unverified' }],
+    );
+    return { itemId };
+  }
+
+  it('sees only the slide the item cites', async () => {
+    const { itemId } = twoSlideLecture();
+    const { getItemBlockText } = await import('@core/db/repo.js');
+    const text = getItemBlockText(db, itemId)!;
+
+    expect(text).toContain('Hypokalemia');
+    // Slide 2 is in the same lecture and must be invisible here, or a repair
+    // could quote it and still appear to verify.
+    expect(text).not.toContain('Trousseau');
+  });
+
+  it('includes tables and transcribed diagram text in the slide it checks', async () => {
+    const blockId = randomUUID();
+    db.prepare(
+      `INSERT INTO blocks (id, lecture_id, ordinal, heading, body, tables_json, image_text)
+       VALUES (?, ?, 3, 'ABGs', '', ?, ?)`,
+    ).run(
+      blockId,
+      lectureId,
+      JSON.stringify([['Disorder', 'pH'], ['Respiratory acidosis', 'down']]),
+      'METABOLIC ACIDOSIS\nKussmaul Respirations (Compensatory Hyperventilation)',
+    );
+    const itemId = insertItem(
+      db,
+      { lectureId, kind: 'flashcard', front: 'Q', back: 'A', blockIds: [blockId] },
+      [{ sourceId, claim: 'Q A', excerpt: 'Kussmaul Respirations', verdict: 'unverified' }],
+    );
+
+    const { getItemBlockText } = await import('@core/db/repo.js');
+    const text = getItemBlockText(db, itemId)!;
+    // Both were previously absent from the verification source, so a card
+    // quoting either could not be verified at all.
+    expect(text).toContain('Kussmaul Respirations');
+    expect(text).toContain('Respiratory acidosis - pH: down');
+    // Long enough to clear the minimum-excerpt floor: a quote of twenty-one
+    // characters proves too little to be accepted as evidence.
+    expect(verifyVerbatim('Kussmaul Respirations (Compensatory Hyperventilation)', text).ok)
+      .toBe(true);
+  });
+
+  it('falls back to the source for a card with no slide', async () => {
+    const { getItemBlockText } = await import('@core/db/repo.js');
+    const id = insertUserCard(db, { lectureId, kind: 'flashcard', front: 'Mine', back: 'Answer' });
+    // Her own cards cite no slide; the caller must fall back rather than
+    // verifying against an empty string.
+    expect(getItemBlockText(db, id)).toBeUndefined();
+  });
+});

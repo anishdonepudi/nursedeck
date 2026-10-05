@@ -1,5 +1,7 @@
 import type { Db } from '../db/index.js';
-import { listPending, listCitations, getSourceText, setCitationVerdict } from '../db/repo.js';
+import {
+  listPending, listCitations, getSourceText, setCitationVerdict, getItemBlockText,
+} from '../db/repo.js';
 import { verifyClaim, type EntailmentOptions } from './entailment.js';
 
 /**
@@ -57,8 +59,17 @@ export async function verifyOneCitation(
   db: Db,
   citation: { id: string; sourceId: string; claim: string; excerpt: string; licenseTier: 'A' | 'B' | 'C' | 'D' },
   opts: EntailmentOptions,
+  itemId?: string,
 ): Promise<{ ok: boolean; estimatedCostUsd: number }> {
-  const sourceText = getSourceText(db, citation.sourceId);
+  // A citation names a SLIDE, so it is checked against that slide rather than
+  // against the whole lecture concatenated together. Using the whole lecture
+  // let citation repair stitch fragments from different slides into a quote
+  // that verified against the concatenation and appeared on no single slide --
+  // five such quotes turned up in an audit of the acid-base deck. Falls back to
+  // the source for citations with no slide: her own cards, imported ones, and
+  // drug labels.
+  const sourceText =
+    (itemId ? getItemBlockText(db, itemId) : undefined) ?? getSourceText(db, citation.sourceId);
   const result = await verifyClaim(
     { claim: citation.claim, excerpt: citation.excerpt, sourceText, tier: citation.licenseTier },
     opts,
@@ -116,7 +127,7 @@ export async function verifyPendingItems(
     let allOk = true;
     for (const c of outstanding) {
       try {
-        const r = await verifyOneCitation(db, c, opts);
+        const r = await verifyOneCitation(db, c, opts, item.id);
         report.estimatedCostUsd += r.estimatedCostUsd;
         if (!r.ok) allOk = false;
       } catch (e) {

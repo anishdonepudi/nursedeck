@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from './index.js';
 import { transaction } from './index.js';
 import type { LectureDoc, LicenseTier } from '@shared/types.js';
+import { slideText as renderSlideText } from '../generate/prompts.js';
 
 /**
  * Data access.
@@ -61,9 +62,11 @@ export function getSourceText(db: Db, sourceId: string): string | undefined {
  */
 export function insertLecture(db: Db, doc: LectureDoc): { lectureId: string; sourceId: string } {
   return transaction(db, () => {
-    const fullText = doc.blocks
-      .map((b) => [b.heading, b.body, b.speakerNotes].filter(Boolean).join('\n'))
-      .join('\n\n');
+    // Rendered through the SAME function the generator and the verifier use.
+    // This omitted tables and transcribed diagram text, so a card quoting
+    // either could not be verified at all -- it failed the verbatim check
+    // against a source that simply did not contain the words.
+    const fullText = doc.blocks.map((b) => renderSlideText(b)).join('\n\n');
 
     const sourceId = insertSource(db, {
       kind: 'lecture',
@@ -668,4 +671,43 @@ export function vouchItem(db: Db, itemId: string): void {
       'Checked and kept by you, from an imported deck.',
     );
   });
+}
+
+/**
+ * The text of the slides an item cites, rendered exactly as the generator saw
+ * them.
+ *
+ * Verification used the whole lecture's concatenated text, which was wrong in
+ * two ways at once. It let citation repair pull fragments from ANY slide in the
+ * deck, producing a quote that verified against the concatenation but appears
+ * on no single slide -- five such quotes showed up in an audit of the acid-base
+ * deck. And a citation names a slide, so that slide is what it should be
+ * checked against.
+ *
+ * Returns undefined when the item cites no block -- a card she wrote herself,
+ * or one from an imported deck -- so the caller can fall back to the source.
+ */
+export function getItemBlockText(db: Db, itemId: string): string | undefined {
+  const rows = db
+    .prepare(
+      `SELECT b.heading, b.body, b.speaker_notes, b.tables_json, b.image_text
+         FROM item_blocks ib JOIN blocks b ON b.id = ib.block_id
+        WHERE ib.item_id = ? ORDER BY b.ordinal`,
+    )
+    .all(itemId) as Record<string, unknown>[];
+  if (rows.length === 0) return undefined;
+
+  return rows
+    .map((r) =>
+      renderSlideText({
+        id: '',
+        ordinal: 0,
+        ...(r['heading'] ? { heading: String(r['heading']) } : {}),
+        body: String(r['body'] ?? ''),
+        ...(r['speaker_notes'] ? { speakerNotes: String(r['speaker_notes']) } : {}),
+        ...(r['tables_json'] ? { tables: JSON.parse(String(r['tables_json'])) as string[][] } : {}),
+        ...(r['image_text'] ? { imageText: String(r['image_text']) } : {}),
+      }),
+    )
+    .join('\n\n');
 }
