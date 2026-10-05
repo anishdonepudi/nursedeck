@@ -22,10 +22,20 @@ export interface ExportOptions {
   includeCitations?: boolean;
 }
 
-/** RFC 4180 quoting: double the quotes, wrap if the field needs it. */
+/**
+ * RFC 4180 quoting: double the quotes, wrap if the field needs it.
+ *
+ * Newlines are flattened first, even though a quoted field is allowed to
+ * contain them. Quizlet's importer -- and this is the format named after it --
+ * splits records on newlines regardless of quoting, so a card whose answer
+ * spans two lines arrives as two broken cards. The TSV path already guards
+ * against the same thing; this one did not, and a card with a source quote
+ * appended always spans lines.
+ */
 function csvField(value: string): string {
-  const needsQuote = /[",\n\r]/.test(value);
-  const escaped = value.replace(/"/g, '""');
+  const flat = value.replace(/\r?\n+/g, ' ').trim();
+  const needsQuote = /[",]/.test(flat);
+  const escaped = flat.replace(/"/g, '""');
   return needsQuote ? `"${escaped}"` : escaped;
 }
 
